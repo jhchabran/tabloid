@@ -19,6 +19,10 @@
 			<div class="pure-u-4-5 content">
 				<h1> Tabloid </h1>
 				<p> {{.text}} </p>
+
+				{{range .items}}
+					<p> {{.}}
+				{{end}}
 			</div>
 		</div>
 	</body>

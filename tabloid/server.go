@@ -126,8 +126,9 @@ func (h *indexHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vars := map[string]string{
-		"text": "foobar",
+	vars := map[string]interface{}{
+		"text":  "foobar",
+		"items": []string{"title A", "title B"},
 	}
 
 	err := h.template.Execute(res, vars)

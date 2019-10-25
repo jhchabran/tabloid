@@ -17,6 +17,7 @@ import (
 
 type indexHandler struct {
 	template *template.Template
+	server   *Server
 }
 
 type Server struct {
@@ -54,6 +55,7 @@ func (s *Server) Start() error {
 
 	s.handlers.index = &indexHandler{
 		template: s.templates.Index,
+		server:   s,
 	}
 
 	http.ListenAndServe(s.addr, s)
@@ -111,6 +113,16 @@ func (s *Server) InsertItem(item *Item) error {
 	return nil
 }
 
+func (s *Server) ListItems() ([]*Item, error) {
+	items := []*Item{}
+	err := s.db.Select(&items, "SELECT * FROM items ORDER BY created_at DESC")
+	if err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
 func shiftPath(p string) (head, tail string) {
 	p = path.Clean("/" + p)
 	i := strings.Index(p[1:], "/") + 1
@@ -126,12 +138,19 @@ func (h *indexHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	vars := map[string]interface{}{
-		"text":  "foobar",
-		"items": []string{"title A", "title B"},
+	items, err := h.server.ListItems()
+	if err != nil {
+		h.server.Logger.Println(err)
+		http.Error(res, "Failed to list items", http.StatusInternalServerError)
+		return
 	}
 
-	err := h.template.Execute(res, vars)
+	vars := map[string]interface{}{
+		"text":  "foobar",
+		"items": items,
+	}
+
+	err = h.template.Execute(res, vars)
 	if err != nil {
 		http.Error(res, "Failed to render template", http.StatusInternalServerError)
 		return

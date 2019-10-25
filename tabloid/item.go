@@ -3,6 +3,7 @@ package tabloid
 import "time"
 
 type Item struct {
+	ID        int       `db:"id"`
 	Title     string    `db:"title"`
 	Body      string    `db:"body"`
 	Score     int       `db:"score"`

@@ -41,6 +41,8 @@ func (s *Server) Start() error {
 	}
 
 	s.mux.HandleFunc("/", s.HandleIndex())
+	staticHandler := http.StripPrefix("/static/", http.FileServer(http.Dir("./assets/static")))
+	s.mux.Handle("/static/", staticHandler)
 
 	http.ListenAndServe(s.addr, s)
 
@@ -95,7 +97,7 @@ func shiftPath(p string) (head, tail string) {
 }
 
 func (s *Server) HandleIndex() http.HandlerFunc {
-	b, err := ioutil.ReadFile("assets/html/index.html")
+	b, err := ioutil.ReadFile("assets/templates/index.html")
 	if err != nil {
 		s.Logger.Fatal(err)
 	}

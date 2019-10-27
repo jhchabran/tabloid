@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -24,20 +23,13 @@ type Server struct {
 	Logger *log.Logger
 	addr   string
 	db     *sqlx.DB
-	wg     sync.WaitGroup
-
-	templates struct {
-		Index *template.Template
-	}
-
-	handlers struct {
-		index *indexHandler
-	}
+	mux    *http.ServeMux
 }
 
 func NewServer(addr string) *Server {
 	return &Server{
 		addr:   addr,
+		mux:    http.NewServeMux(),
 		Logger: log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
 	}
 }
@@ -48,15 +40,7 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	err = s.loadTemplates()
-	if err != nil {
-		return err
-	}
-
-	s.handlers.index = &indexHandler{
-		template: s.templates.Index,
-		server:   s,
-	}
+	s.mux.HandleFunc("/", s.HandleIndex())
 
 	http.ListenAndServe(s.addr, s)
 
@@ -65,13 +49,7 @@ func (s *Server) Start() error {
 }
 
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	var head string
-	head, req.URL.Path = shiftPath(req.URL.Path)
-
-	if head == "" {
-		s.handlers.index.ServeHTTP(res, req)
-		return
-	}
+	s.mux.ServeHTTP(res, req)
 }
 
 func (s *Server) connectToDatabase() error {
@@ -81,22 +59,6 @@ func (s *Server) connectToDatabase() error {
 	}
 
 	s.db = db
-
-	return nil
-}
-
-func (s *Server) loadTemplates() error {
-	b, err := ioutil.ReadFile("assets/html/index.html")
-	if err != nil {
-		return err
-	}
-
-	t, err := template.New("index").Parse(string(b))
-	if err != nil {
-		return err
-	}
-
-	s.templates.Index = t
 
 	return nil
 }
@@ -132,27 +94,39 @@ func shiftPath(p string) (head, tail string) {
 	return p[1:i], p[i:]
 }
 
-func (h *indexHandler) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	if req.Method != "GET" {
-		http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	items, err := h.server.ListItems()
+func (s *Server) HandleIndex() http.HandlerFunc {
+	b, err := ioutil.ReadFile("assets/html/index.html")
 	if err != nil {
-		h.server.Logger.Println(err)
-		http.Error(res, "Failed to list items", http.StatusInternalServerError)
-		return
+		s.Logger.Fatal(err)
 	}
 
-	vars := map[string]interface{}{
-		"text":  "foobar",
-		"items": items,
-	}
-
-	err = h.template.Execute(res, vars)
+	tmpl, err := template.New("index").Parse(string(b))
 	if err != nil {
-		http.Error(res, "Failed to render template", http.StatusInternalServerError)
-		return
+		s.Logger.Fatal(err)
+	}
+
+	return func(res http.ResponseWriter, req *http.Request) {
+		if req.Method != "GET" {
+			http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		items, err := s.ListItems()
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Failed to list items", http.StatusInternalServerError)
+			return
+		}
+
+		vars := map[string]interface{}{
+			"text":  "foobar",
+			"items": items,
+		}
+
+		err = tmpl.Execute(res, vars)
+		if err != nil {
+			http.Error(res, "Failed to render template", http.StatusInternalServerError)
+			return
+		}
 	}
 }

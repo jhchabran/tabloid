@@ -2,12 +2,9 @@ package tabloid
 
 import (
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"path"
-	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -87,28 +84,15 @@ func (s *Server) ListItems() ([]*Item, error) {
 	return items, nil
 }
 
-func shiftPath(p string) (head, tail string) {
-	p = path.Clean("/" + p)
-	i := strings.Index(p[1:], "/") + 1
-	if i <= 0 {
-		return p[1:], "/"
-	}
-	return p[1:i], p[i:]
-}
-
 func (s *Server) HandleIndex() http.HandlerFunc {
-	b, err := ioutil.ReadFile("assets/templates/index.html")
-	if err != nil {
-		s.Logger.Fatal(err)
-	}
-
-	tmpl, err := template.New("index").Parse(string(b))
+	tmpl, err := template.ParseFiles("assets/templates/index.html", "assets/templates/_header.html", "assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal(err)
 	}
 
 	return func(res http.ResponseWriter, req *http.Request) {
 		res.Header().Set("Content-Type", "text/html")
+
 		if req.Method != "GET" {
 			http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
 			return
@@ -128,6 +112,7 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 
 		err = tmpl.Execute(res, vars)
 		if err != nil {
+			s.Logger.Println(err)
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)
 			return
 		}

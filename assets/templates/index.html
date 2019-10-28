@@ -1,32 +1,13 @@
-<!doctype html>
+{{template "header"}}
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
+<h1> Tabloid </h1>
+<p> {{.text}} </p>
 
-		<title>Tabloid</title>
-		<meta name="description" content="Tabloid description">
-		<meta name="author" content="Tabloid">
+{{range .items}}
+<div class="item">
+	<h2> {{.Title}} </h2>
+	<p> {{.Body}} </p>
+</div>
+{{end}}
 
-		<link rel="stylesheet" href="https://unpkg.com/purecss@1.0.1/build/pure-min.css" integrity="sha384-oAOxQR6DkCoMliIh8yFnu25d7Eq/PHS21PClpwjOTeU2jRSq11vu66rf90/cZr47" crossorigin="anonymous">
-		<link rel="stylesheet" href="/static/style.css">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
-
-	</head>
-
-	<body>
-		<div class="pure-g">
-			<div class="pure-u-4-5 content">
-				<h1> Tabloid </h1>
-				<p> {{.text}} </p>
-
-				{{range .items}}
-				<div class="item">
-					<h2> {{.Title}} </h2>
-					<p> {{.Body}} </p>
-				</div>
-				{{end}}
-			</div>
-		</div>
-	</body>
-</html>
+{{template "footer"}}

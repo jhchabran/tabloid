@@ -108,6 +108,7 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 	}
 
 	return func(res http.ResponseWriter, req *http.Request) {
+		res.Header().Set("Content-Type", "text/html")
 		if req.Method != "GET" {
 			http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
 			return

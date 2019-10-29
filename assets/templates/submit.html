@@ -1,0 +1,20 @@
+{{template "header"}}
+
+<h1> Submit </h1>
+<p> Some infos </p>
+
+<form action="/submit" method="post" id="submit-form" autocomplete="off">
+	<label for="title">Title: </label>
+	<input type="text" name="name" id="title" required>
+
+	<label for="url">URL: </label>
+	<input type="text" name="url" id="url" required>
+
+	<label for="body">Body: </label>
+	<textarea name="body" id="body" rows="4" required>
+	</textarea>
+
+	<input type="submit" value="Submit">
+</form>
+
+{{template "footer"}}

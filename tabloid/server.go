@@ -129,18 +129,49 @@ func (s *Server) HandleSubmit() http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
 		res.Header().Set("Content-Type", "text/html")
 
-		if req.Method != "GET" || req.Method != "POST" {
+		if req.Method != "GET" && req.Method != "POST" {
 			http.Error(res, "Only GET or POST is allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
+		if req.Method == "GET" {
+			err = tmpl.Execute(res, nil)
+			if err != nil {
+				s.Logger.Println(err)
+				http.Error(res, "Failed to render template", http.StatusInternalServerError)
+				return
+			}
+
+		} else {
+			err := req.ParseForm()
+			if err != nil {
+				s.Logger.Println(err)
+				http.Error(res, "Couldn't parse form", http.StatusBadRequest)
+			}
+
+			s.Logger.Println(req.Form)
+
+			title := req.Form["title"][0]
+			body := req.Form["body"][0]
+			// url := req.Form["url"][0]
+
+			item := &Item{
+				Author: "Thomas",
+				Title:  title,
+				Body:   body,
+				// TODO url
+			}
+
+			err = s.InsertItem(item)
+			if err != nil {
+				http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
+				return
+			}
+
+			http.Redirect(res, req, "/", http.StatusFound)
+		}
+
 		// TODO handle post
 
-		err = tmpl.Execute(res, nil)
-		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Failed to render template", http.StatusInternalServerError)
-			return
-		}
 	}
 }

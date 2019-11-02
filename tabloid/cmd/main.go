@@ -7,17 +7,8 @@ import (
 )
 
 func main() {
-	s := tabloid.NewServer(":8080")
+	s := tabloid.NewServer(":8080", "user=postgres dbname=tabloid sslmode=disable password=postgres host=127.0.0.1")
 	err := s.Start()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	i := tabloid.NewStory("somee title",
-		"some body",
-		"jh")
-
-	err = s.InsertStory(i)
 	if err != nil {
 		log.Fatal(err)
 	}

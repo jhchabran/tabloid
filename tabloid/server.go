@@ -1,6 +1,7 @@
 package tabloid
 
 import (
+	"context"
 	"html/template"
 	"log"
 	"net/http"
@@ -11,23 +12,24 @@ import (
 	_ "github.com/lib/pq"
 )
 
-type indexHandler struct {
-	template *template.Template
-	server   *Server
-}
-
 type Server struct {
-	Logger *log.Logger
-	addr   string
-	db     *sqlx.DB
-	mux    *http.ServeMux
+	Logger          *log.Logger
+	addr            string
+	db              *sqlx.DB
+	dbString        string
+	mux             *http.ServeMux
+	done            chan struct{}
+	idleConnsClosed chan struct{}
 }
 
-func NewServer(addr string) *Server {
+func NewServer(addr string, dbString string) *Server {
 	return &Server{
-		addr:   addr,
-		mux:    http.NewServeMux(),
-		Logger: log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
+		addr:            addr,
+		dbString:        dbString,
+		mux:             http.NewServeMux(),
+		Logger:          log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
+		done:            make(chan struct{}),
+		idleConnsClosed: make(chan struct{}),
 	}
 }
 
@@ -42,10 +44,32 @@ func (s *Server) Start() error {
 	staticHandler := http.StripPrefix("/static/", http.FileServer(http.Dir("./assets/static")))
 	s.mux.Handle("/static/", staticHandler)
 
-	http.ListenAndServe(s.addr, s)
+	httpServer := http.Server{Addr: s.addr, Handler: s}
 
-	// we'll never get here
+	go func() {
+		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
+			// should probably bubble this up
+			s.Logger.Fatal(err)
+		}
+
+	}()
+
+	<-s.done
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		return err
+	}
+	close(s.idleConnsClosed)
+
 	return nil
+}
+
+func (s *Server) Stop() {
+	close(s.done)
+	<-s.idleConnsClosed
 }
 
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
@@ -53,7 +77,7 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) connectToDatabase() error {
-	db, err := sqlx.Connect("postgres", "user=postgres dbname=tabloid sslmode=disable password=postgres host=127.0.0.1")
+	db, err := sqlx.Connect("postgres", s.dbString)
 	if err != nil {
 		return err
 	}
@@ -86,6 +110,12 @@ func (s *Server) ListStories() ([]*Story, error) {
 }
 
 func (s *Server) HandleIndex() http.HandlerFunc {
+	dir, err := os.Getwd()
+	if err != nil {
+		s.Logger.Fatal(err)
+	}
+	s.Logger.Println(dir)
+
 	tmpl, err := template.ParseFiles("assets/templates/index.html",
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html",

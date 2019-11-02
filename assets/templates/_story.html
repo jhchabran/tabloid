@@ -1,0 +1,11 @@
+{{define "story"}}
+<li class="story">
+	<a href="{{.URL}}">
+		{{.Title}}
+	</a>
+	<br/>
+	<small>
+		{{.Score}} by {{.Author}} at {{.CreatedAt}}
+	</small>
+</li>
+{{end}}

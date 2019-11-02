@@ -86,7 +86,10 @@ func (s *Server) ListStories() ([]*Story, error) {
 }
 
 func (s *Server) HandleIndex() http.HandlerFunc {
-	tmpl, err := template.ParseFiles("assets/templates/index.html", "assets/templates/_header.html", "assets/templates/_footer.html")
+	tmpl, err := template.ParseFiles("assets/templates/index.html",
+		"assets/templates/_header.html",
+		"assets/templates/_footer.html",
+		"assets/templates/_story.html")
 	if err != nil {
 		s.Logger.Fatal(err)
 	}
@@ -107,7 +110,6 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 		}
 
 		vars := map[string]interface{}{
-			"text":    "foobar",
 			"stories": stories,
 		}
 

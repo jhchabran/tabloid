@@ -1,13 +1,9 @@
 {{template "header"}}
 
-<h1> Tabloid </h1>
-<p> {{.text}} </p>
-
-{{range .stories}}
-<div class="item">
-	<h2> {{.Title}} </h2>
-	<p> {{.Body}} </p>
-</div>
-{{end}}
+<ol>
+	{{range .stories}}
+		{{template "story" .}}
+	{{end}}
+</ol>
 
 {{template "footer"}}

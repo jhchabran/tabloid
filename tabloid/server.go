@@ -63,9 +63,9 @@ func (s *Server) connectToDatabase() error {
 	return nil
 }
 
-func (s *Server) InsertItem(item *Item) error {
-	_, err := s.db.Exec("INSERT INTO items (title, body, score, author, created_at) VALUES ($1, $2, $3, $4, $5)",
-		item.Title, item.Body, item.Score, item.Author, time.Now(),
+func (s *Server) InsertStory(item *Story) error {
+	_, err := s.db.Exec("INSERT INTO stories (title, url, body, score, author, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
+		item.Title, item.URL, item.Body, item.Score, item.Author, time.Now(),
 	)
 
 	if err != nil {
@@ -75,14 +75,14 @@ func (s *Server) InsertItem(item *Item) error {
 	return nil
 }
 
-func (s *Server) ListItems() ([]*Item, error) {
-	items := []*Item{}
-	err := s.db.Select(&items, "SELECT * FROM items ORDER BY created_at DESC")
+func (s *Server) ListStories() ([]*Story, error) {
+	stories := []*Story{}
+	err := s.db.Select(&stories, "SELECT * FROM stories ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
 
-	return items, nil
+	return stories, nil
 }
 
 func (s *Server) HandleIndex() http.HandlerFunc {
@@ -99,16 +99,16 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 			return
 		}
 
-		items, err := s.ListItems()
+		stories, err := s.ListStories()
 		if err != nil {
 			s.Logger.Println(err)
-			http.Error(res, "Failed to list items", http.StatusInternalServerError)
+			http.Error(res, "Failed to list stories", http.StatusInternalServerError)
 			return
 		}
 
 		vars := map[string]interface{}{
-			"text":  "foobar",
-			"items": items,
+			"text":    "foobar",
+			"stories": stories,
 		}
 
 		err = tmpl.Execute(res, vars)
@@ -153,25 +153,23 @@ func (s *Server) HandleSubmit() http.HandlerFunc {
 
 			title := req.Form["title"][0]
 			body := req.Form["body"][0]
-			// url := req.Form["url"][0]
+			url := req.Form["url"][0]
 
-			item := &Item{
+			item := &Story{
 				Author: "Thomas",
 				Title:  title,
 				Body:   body,
-				// TODO url
+				URL:    url,
 			}
 
-			err = s.InsertItem(item)
+			err = s.InsertStory(item)
 			if err != nil {
+				s.Logger.Println(err)
 				http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
 				return
 			}
 
 			http.Redirect(res, req, "/", http.StatusFound)
 		}
-
-		// TODO handle post
-
 	}
 }

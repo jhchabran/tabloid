@@ -13,11 +13,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	i := tabloid.NewItem("somee title",
+	i := tabloid.NewStory("somee title",
 		"some body",
 		"jh")
 
-	err = s.InsertItem(i)
+	err = s.InsertStory(i)
 	if err != nil {
 		log.Fatal(err)
 	}

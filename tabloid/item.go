@@ -2,17 +2,18 @@ package tabloid
 
 import "time"
 
-type Item struct {
+type Story struct {
 	ID        int       `db:"id"`
 	Title     string    `db:"title"`
+	URL       string    `db:"url"`
 	Body      string    `db:"body"`
 	Score     int       `db:"score"`
 	Author    string    `db:"author"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
-func NewItem(title string, body string, author string) *Item {
-	return &Item{
+func NewStory(title string, body string, author string) *Story {
+	return &Story{
 		Title:     title,
 		Body:      body,
 		Score:     1,

@@ -42,9 +42,7 @@ func TestHandleIndexStory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		os.Chdir("tabloid")
-	}()
+	defer os.Chdir("tabloid")
 
 	s := NewServer("localhost:8081", "user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
 	assert.Nil(t, s.Prepare())

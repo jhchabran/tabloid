@@ -33,7 +33,7 @@ func NewServer(addr string, dbString string) *Server {
 	}
 }
 
-func (s *Server) Start() error {
+func (s *Server) Prepare() error {
 	err := s.connectToDatabase()
 	if err != nil {
 		return err
@@ -44,6 +44,10 @@ func (s *Server) Start() error {
 	staticHandler := http.StripPrefix("/static/", http.FileServer(http.Dir("./assets/static")))
 	s.mux.Handle("/static/", staticHandler)
 
+	return nil
+}
+
+func (s *Server) Start() error {
 	httpServer := http.Server{Addr: s.addr, Handler: s}
 
 	go func() {
@@ -51,7 +55,6 @@ func (s *Server) Start() error {
 			// should probably bubble this up
 			s.Logger.Fatal(err)
 		}
-
 	}()
 
 	<-s.done

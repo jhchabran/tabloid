@@ -2,22 +2,20 @@ package tabloid
 
 import "time"
 
-type Story struct {
+type Comment struct {
 	ID        int       `db:"id"`
-	Title     string    `db:"title"`
-	URL       string    `db:"url"`
+	ParentID  int       `db:"parent_id"`
 	Body      string    `db:"body"`
 	Score     int       `db:"score"`
 	Author    string    `db:"author"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
-func NewStory(title string, body string, author string) *Story {
-	return &Story{
-		Title:     title,
+func NewComment(parentID int, body string, author string) *Comment {
+	return &Comment{
 		Body:      body,
-		Score:     1,
 		Author:    author,
+		Score:     1,
 		CreatedAt: time.Now(),
 	}
 }

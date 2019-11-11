@@ -6,26 +6,24 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
-	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 
 type Server struct {
 	Logger          *log.Logger
 	addr            string
-	db              *sqlx.DB
+	store           Store
 	dbString        string
 	mux             *http.ServeMux
 	done            chan struct{}
 	idleConnsClosed chan struct{}
 }
 
-func NewServer(addr string, dbString string) *Server {
+func NewServer(addr string, store Store) *Server {
 	return &Server{
 		addr:            addr,
-		dbString:        dbString,
+		store:           store,
 		mux:             http.NewServeMux(),
 		Logger:          log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
 		done:            make(chan struct{}),
@@ -34,7 +32,7 @@ func NewServer(addr string, dbString string) *Server {
 }
 
 func (s *Server) Prepare() error {
-	err := s.connectToDatabase()
+	err := s.store.Connect()
 	if err != nil {
 		return err
 	}
@@ -79,39 +77,6 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	s.mux.ServeHTTP(res, req)
 }
 
-func (s *Server) connectToDatabase() error {
-	db, err := sqlx.Connect("postgres", s.dbString)
-	if err != nil {
-		return err
-	}
-
-	s.db = db
-
-	return nil
-}
-
-func (s *Server) InsertStory(item *Story) error {
-	_, err := s.db.Exec("INSERT INTO stories (title, url, body, score, author, created_at) VALUES ($1, $2, $3, $4, $5, $6)",
-		item.Title, item.URL, item.Body, item.Score, item.Author, time.Now(),
-	)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Server) ListStories() ([]*Story, error) {
-	stories := []*Story{}
-	err := s.db.Select(&stories, "SELECT * FROM stories ORDER BY created_at DESC")
-	if err != nil {
-		return nil, err
-	}
-
-	return stories, nil
-}
-
 func (s *Server) HandleIndex() http.HandlerFunc {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -135,7 +100,7 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 			return
 		}
 
-		stories, err := s.ListStories()
+		stories, err := s.store.ListStories()
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Failed to list stories", http.StatusInternalServerError)
@@ -197,7 +162,7 @@ func (s *Server) HandleSubmit() http.HandlerFunc {
 				URL:    url,
 			}
 
-			err = s.InsertStory(item)
+			err = s.store.InsertStory(item)
 			if err != nil {
 				s.Logger.Println(err)
 				http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)

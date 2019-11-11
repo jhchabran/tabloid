@@ -41,9 +41,10 @@ func (s *Server) Prepare() error {
 	}
 
 	s.router.GET("/", s.HandleIndex())
+	s.router.ServeFiles("/static/*filepath", http.Dir("assets/static"))
 	s.router.GET("/submit", s.HandleSubmit())
 	s.router.POST("/submit", s.HandleSubmitAction())
-	s.router.ServeFiles("/static/*filepath", http.Dir("assets/static"))
+	s.router.GET("/stories/:id/comments", s.HandleShow())
 
 	return nil
 }
@@ -122,6 +123,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		}
 	}
 }
+
 func (s *Server) HandleSubmit() httprouter.Handle {
 	tmpl, err := template.ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
 	if err != nil {
@@ -132,6 +134,30 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 		res.Header().Set("Content-Type", "text/html")
 
 		err = tmpl.Execute(res, nil)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Failed to render template", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func (s *Server) HandleShow() httprouter.Handle {
+	tmpl, err := template.ParseFiles("assets/templates/show.html", "assets/templates/_story.html", "assets/templates/_header.html", "assets/templates/_footer.html")
+	if err != nil {
+		s.Logger.Fatal(err)
+	}
+
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		res.Header().Set("Content-Type", "text/html")
+		story, err := s.store.FindStory(params.ByName("id"))
+		if err != nil {
+			s.Logger.Println(err)
+			// TODO deal with 404
+			http.Error(res, "Failed to find story", http.StatusInternalServerError)
+		}
+
+		err = tmpl.Execute(res, story)
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)

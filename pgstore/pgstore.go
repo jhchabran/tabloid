@@ -44,6 +44,16 @@ func (s *PGStore) ListStories() ([]*tabloid.Story, error) {
 	return stories, nil
 }
 
+func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
+	story := tabloid.Story{}
+	err := s.db.Get(&story, "SELECT * FROM stories WHERE id=$1", ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &story, nil
+}
+
 func (s *PGStore) InsertStory(story *tabloid.Story) error {
 	var id int64
 	err := s.db.Get(&id, "INSERT INTO stories (title, url, body, score, author, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",

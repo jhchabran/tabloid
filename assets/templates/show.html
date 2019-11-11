@@ -1,0 +1,21 @@
+{{template "header"}}
+
+<ol>
+	{{template "story" .}}
+</ol>
+
+<div id="post-comment">
+	<form action="/stories/{{.ID}}/comments" method="post" id="submit-form" autocomplete="off">
+		<div class="submit-field">
+			<label for="body">Body: </label>
+			<textarea name="body" id="body" rows="4" required>
+			</textarea>
+		</div>
+
+		<div class="submit-field">
+			<input type="submit" value="Submit">
+		</div>
+	</form>
+</div>
+
+{{template "footer"}}

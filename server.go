@@ -201,14 +201,14 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		body := strings.TrimSpace(req.Form["body"][0])
 		url := req.Form["url"][0]
 
-		item := &Story{
+		story := &Story{
 			Author: "Thomas",
 			Title:  title,
 			Body:   body,
 			URL:    url,
 		}
 
-		err = s.store.InsertStory(item)
+		err = s.store.InsertStory(story)
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)

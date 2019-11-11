@@ -2,10 +2,12 @@ package tabloid
 
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
@@ -45,6 +47,7 @@ func (s *Server) Prepare() error {
 	s.router.GET("/submit", s.HandleSubmit())
 	s.router.POST("/submit", s.HandleSubmitAction())
 	s.router.GET("/stories/:id/comments", s.HandleShow())
+	s.router.POST("/stories/:id/comments", s.HandleSubmitCommentAction())
 
 	return nil
 }
@@ -143,7 +146,12 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 }
 
 func (s *Server) HandleShow() httprouter.Handle {
-	tmpl, err := template.ParseFiles("assets/templates/show.html", "assets/templates/_story.html", "assets/templates/_header.html", "assets/templates/_footer.html")
+	tmpl, err := template.ParseFiles(
+		"assets/templates/show.html",
+		"assets/templates/_story.html",
+		"assets/templates/_comment.html",
+		"assets/templates/_header.html",
+		"assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal(err)
 	}
@@ -157,7 +165,18 @@ func (s *Server) HandleShow() httprouter.Handle {
 			http.Error(res, "Failed to find story", http.StatusInternalServerError)
 		}
 
-		err = tmpl.Execute(res, story)
+		comments, err := s.store.ListComments(strconv.Itoa(int(story.ID)))
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Failed to list comments", http.StatusInternalServerError)
+			return
+		}
+
+		err = tmpl.Execute(res, map[string]interface{}{
+			"Story":    story,
+			"Comments": comments,
+		})
+
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)
@@ -197,5 +216,40 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		}
 
 		http.Redirect(res, req, "/", http.StatusFound)
+	}
+}
+
+func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		res.Header().Set("Content-Type", "text/html")
+		story, err := s.store.FindStory(params.ByName("id"))
+		if err != nil {
+			s.Logger.Println(err)
+			// TODO deal with 404
+			http.Error(res, "Failed to find story", http.StatusInternalServerError)
+		}
+
+		err = req.ParseForm()
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
+		}
+
+		body := strings.TrimSpace(req.Form["body"][0])
+
+		comment := &Comment{
+			Body:     body,
+			ParentID: story.ID,
+		}
+
+		err = s.store.InsertComment(comment)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
+			return
+		}
+
+		storyPath := fmt.Sprintf("/stories/%v/comments", story.ID)
+		http.Redirect(res, req, storyPath, http.StatusFound)
 	}
 }

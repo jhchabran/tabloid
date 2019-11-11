@@ -1,11 +1,11 @@
 {{template "header"}}
 
 <ol>
-	{{template "story" .}}
+	{{template "story" .Story}}
 </ol>
 
 <div id="post-comment">
-	<form action="/stories/{{.ID}}/comments" method="post" id="submit-form" autocomplete="off">
+	<form action="/stories/{{.Story.ID}}/comments" method="post" id="submit-form" autocomplete="off">
 		<div class="submit-field">
 			<label for="body">Body: </label>
 			<textarea name="body" id="body" rows="4" required>
@@ -16,6 +16,14 @@
 			<input type="submit" value="Submit">
 		</div>
 	</form>
+</div>
+
+<div id="comments">
+	<ul>
+		{{range .Comments}}
+			{{template "comment" .}}
+		{{end}}
+	</ul>
 </div>
 
 {{template "footer"}}

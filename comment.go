@@ -3,10 +3,10 @@ package tabloid
 import "time"
 
 type Comment struct {
-	ID        int       `db:"id"`
-	ParentID  int       `db:"parent_id"`
+	ID        int64     `db:"id"`
+	ParentID  int64     `db:"parent_id"`
 	Body      string    `db:"body"`
-	Score     int       `db:"score"`
+	Score     int64     `db:"score"`
 	Author    string    `db:"author"`
 	CreatedAt time.Time `db:"created_at"`
 }

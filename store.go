@@ -5,6 +5,6 @@ type Store interface {
 	FindStory(ID string) (*Story, error)
 	ListStories() ([]*Story, error)
 	InsertStory(item *Story) error
-	ListComments(storyID int) ([]*Comment, error)
+	ListComments(storyID string) ([]*Comment, error)
 	InsertComment(comment *Comment) error
 }

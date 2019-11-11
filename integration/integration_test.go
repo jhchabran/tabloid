@@ -29,6 +29,8 @@ func (suite *IntegrationTestSuite) SetupTest() {
 
 func (suite *IntegrationTestSuite) TearDownTest() {
 	os.Chdir("integration")
+	suite.pgStore.DB().MustExec("TRUNCATE TABLE stories;")
+	suite.pgStore.DB().MustExec("TRUNCATE TABLE comments;")
 }
 
 func TestIntegrationTestSuite(t *testing.T) {

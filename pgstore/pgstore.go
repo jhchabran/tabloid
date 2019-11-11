@@ -30,6 +30,10 @@ func (s *PGStore) Connect() error {
 	return nil
 }
 
+func (s *PGStore) DB() *sqlx.DB {
+	return s.db
+}
+
 func (s *PGStore) ListStories() ([]*tabloid.Story, error) {
 	stories := []*tabloid.Story{}
 	err := s.db.Select(&stories, "SELECT * FROM stories ORDER BY created_at DESC")

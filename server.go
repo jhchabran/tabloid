@@ -6,6 +6,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
+
+	"github.com/julienschmidt/httprouter"
 
 	_ "github.com/lib/pq"
 )
@@ -15,7 +18,7 @@ type Server struct {
 	addr            string
 	store           Store
 	dbString        string
-	mux             *http.ServeMux
+	router          *httprouter.Router
 	done            chan struct{}
 	idleConnsClosed chan struct{}
 }
@@ -24,7 +27,7 @@ func NewServer(addr string, store Store) *Server {
 	return &Server{
 		addr:            addr,
 		store:           store,
-		mux:             http.NewServeMux(),
+		router:          httprouter.New(),
 		Logger:          log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
 		done:            make(chan struct{}),
 		idleConnsClosed: make(chan struct{}),
@@ -37,10 +40,10 @@ func (s *Server) Prepare() error {
 		return err
 	}
 
-	s.mux.HandleFunc("/", s.HandleIndex())
-	s.mux.HandleFunc("/submit", s.HandleSubmit())
-	staticHandler := http.StripPrefix("/static/", http.FileServer(http.Dir("./assets/static")))
-	s.mux.Handle("/static/", staticHandler)
+	s.router.GET("/", s.HandleIndex())
+	s.router.GET("/submit", s.HandleSubmit())
+	s.router.POST("/submit", s.HandleSubmitAction())
+	s.router.ServeFiles("/static/*filepath", http.Dir("assets/static"))
 
 	return nil
 }
@@ -74,10 +77,10 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	s.mux.ServeHTTP(res, req)
+	s.router.ServeHTTP(res, req)
 }
 
-func (s *Server) HandleIndex() http.HandlerFunc {
+func (s *Server) HandleIndex() httprouter.Handle {
 	dir, err := os.Getwd()
 	if err != nil {
 		s.Logger.Fatal(err)
@@ -92,7 +95,7 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 		s.Logger.Fatal(err)
 	}
 
-	return func(res http.ResponseWriter, req *http.Request) {
+	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
 		if req.Method != "GET" {
@@ -119,57 +122,54 @@ func (s *Server) HandleIndex() http.HandlerFunc {
 		}
 	}
 }
-
-func (s *Server) HandleSubmit() http.HandlerFunc {
+func (s *Server) HandleSubmit() httprouter.Handle {
 	tmpl, err := template.ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal(err)
 	}
 
-	return func(res http.ResponseWriter, req *http.Request) {
+	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		if req.Method != "GET" && req.Method != "POST" {
-			http.Error(res, "Only GET or POST is allowed", http.StatusMethodNotAllowed)
+		err = tmpl.Execute(res, nil)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Failed to render template", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func (s *Server) HandleSubmitAction() httprouter.Handle {
+	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+		res.Header().Set("Content-Type", "text/html")
+
+		err := req.ParseForm()
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
+		}
+
+		s.Logger.Println(req.Form)
+
+		title := req.Form["title"][0]
+		body := strings.TrimSpace(req.Form["body"][0])
+		url := req.Form["url"][0]
+
+		item := &Story{
+			Author: "Thomas",
+			Title:  title,
+			Body:   body,
+			URL:    url,
+		}
+
+		err = s.store.InsertStory(item)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
 			return
 		}
 
-		if req.Method == "GET" {
-			err = tmpl.Execute(res, nil)
-			if err != nil {
-				s.Logger.Println(err)
-				http.Error(res, "Failed to render template", http.StatusInternalServerError)
-				return
-			}
-
-		} else {
-			err := req.ParseForm()
-			if err != nil {
-				s.Logger.Println(err)
-				http.Error(res, "Couldn't parse form", http.StatusBadRequest)
-			}
-
-			s.Logger.Println(req.Form)
-
-			title := req.Form["title"][0]
-			body := req.Form["body"][0]
-			url := req.Form["url"][0]
-
-			item := &Story{
-				Author: "Thomas",
-				Title:  title,
-				Body:   body,
-				URL:    url,
-			}
-
-			err = s.store.InsertStory(item)
-			if err != nil {
-				s.Logger.Println(err)
-				http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
-				return
-			}
-
-			http.Redirect(res, req, "/", http.StatusFound)
-		}
+		http.Redirect(res, req, "/", http.StatusFound)
 	}
 }

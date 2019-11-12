@@ -3,19 +3,22 @@ package tabloid
 import "time"
 
 type Comment struct {
-	ID        int64     `db:"id"`
-	ParentID  int64     `db:"parent_id"`
-	Body      string    `db:"body"`
-	Score     int64     `db:"score"`
-	Author    string    `db:"author"`
-	CreatedAt time.Time `db:"created_at"`
+	ID              int64     `db:"id"`
+	ParentCommentID int64     `db:"parent_comment_id"`
+	StoryID         int64     `db:"story_id"`
+	Body            string    `db:"body"`
+	Upvotes         int64     `db:"upvotes"`
+	Downvotes       int64     `db:"downvotes"`
+	Author          string    `db:"author"`
+	CreatedAt       time.Time `db:"created_at"`
 }
 
-func NewComment(parentID int, body string, author string) *Comment {
+func NewComment(storyID int64, parentCommentID int64, body string, author string) *Comment {
 	return &Comment{
-		Body:      body,
-		Author:    author,
-		Score:     1,
-		CreatedAt: time.Now(),
+		ParentCommentID: parentCommentID,
+		StoryID:         storyID,
+		Body:            body,
+		Author:          author,
+		CreatedAt:       time.Now(),
 	}
 }

@@ -172,9 +172,14 @@ func (s *Server) HandleShow() httprouter.Handle {
 			return
 		}
 
+		commentPresenters := []*CommentPresenter{}
+		for _, c := range comments {
+			commentPresenters = append(commentPresenters, NewCommentPresenter(c))
+		}
+
 		err = tmpl.Execute(res, map[string]interface{}{
 			"Story":    story,
-			"Comments": comments,
+			"Comments": commentPresenters,
 		})
 
 		if err != nil {
@@ -238,8 +243,8 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		body := strings.TrimSpace(req.Form["body"][0])
 
 		comment := &Comment{
-			Body:     body,
-			ParentID: story.ID,
+			Body:    body,
+			StoryID: story.ID,
 		}
 
 		err = s.store.InsertComment(comment)

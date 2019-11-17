@@ -71,7 +71,7 @@ func (s *PGStore) InsertStory(story *tabloid.Story) error {
 
 func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 	comments := []*tabloid.Comment{}
-	err := s.db.Select(&comments, "SELECT * FROM comments WHERE parent_id=$1 ORDER BY created_at DESC", storyID)
+	err := s.db.Select(&comments, "SELECT * FROM comments WHERE story_id=$1 ORDER BY created_at DESC", storyID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +81,8 @@ func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 
 func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	var id int64
-	err := s.db.Get(&id, "INSERT INTO comments (parent_id, body, score, author, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-		comment.ParentID, comment.Body, comment.Score, comment.Author, time.Now(),
+	err := s.db.Get(&id, "INSERT INTO comments (story_id, body, upvotes, downvotes, author, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+		comment.StoryID, comment.Body, comment.Upvotes, comment.Downvotes, comment.Author, time.Now(),
 	)
 
 	if err != nil {

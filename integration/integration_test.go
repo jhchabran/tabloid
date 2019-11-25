@@ -112,21 +112,21 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 		"url":   []string{"http://duckduckgo.com"},
 		"body":  []string{"foobar"},
 	}
-	resp, err = http.PostForm(ts.URL+"/submit", values)
+	client := &http.Client{
+		CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	resp, err = client.PostForm(ts.URL+"/submit", values)
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, http.StatusFound, resp.StatusCode)
 	}
 
+	// test for the redirection to the root page
 	redirectTo, err := resp.Location()
 	assert.Nil(t, err)
 
-	// test for the redirection to the root page
-	resp, err = http.Get(redirectTo.RequestURI())
+	resp, err = client.Get(redirectTo.String())
 	assert.Nil(t, err)
-	if resp != nil {
-		assert.Equal(t, http.StatusFound, resp.StatusCode)
-	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()

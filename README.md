@@ -1,6 +1,6 @@
 # Tabloid
 
-[![Build Status](https://travis-ci.org/jhchabran/tabloid.svg?branch=master)](https://travis-ci.org/jhchabran/tabloid)
+[![CircleCI](https://circleci.com/gh/jhchabran/tabloid.svg?style=svg&circle-token=533494a13f23294eba935427d6666c2b6eea5ae3)](https://circleci.com/gh/jhchabran/tabloid)
 [![Documentation](https://godoc.org/github.com/tabloid/jhchabran?status.svg)](http://godoc.org/github.com/jhchabran/tabloid)
 
 ## Objective

@@ -2,5 +2,16 @@
 <li>
 	Score: {{.Score}} Author {{.Author}}
 	<p>{{.Body}}</p>
+	<input class="trigger" id="{{.ID}}" type="checkbox">
+	<label for="{{.ID}}">Toggle Reply</label>
+	<div class="">
+		{{template "comment_form" .}}
+	</div>
+
+	<ul class="comments">
+		{{range .Children}}
+			{{template "comment" .}}
+		{{end}}
+	</ul>
 </li>
 {{end}}

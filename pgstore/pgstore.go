@@ -81,8 +81,8 @@ func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 
 func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	var id int64
-	err := s.db.Get(&id, "INSERT INTO comments (story_id, body, upvotes, downvotes, author, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-		comment.StoryID, comment.Body, comment.Upvotes, comment.Downvotes, comment.Author, time.Now(),
+	err := s.db.Get(&id, "INSERT INTO comments (story_id, parent_comment_id, body, upvotes, downvotes, author, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+		comment.StoryID, comment.ParentCommentID, comment.Body, comment.Upvotes, comment.Downvotes, comment.Author, time.Now(),
 	)
 
 	if err != nil {

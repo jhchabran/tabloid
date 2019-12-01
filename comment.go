@@ -18,6 +18,8 @@ type Comment struct {
 
 // TODO move this in a better place
 type CommentPresenter struct {
+	ID         int64
+	StoryID    int64
 	Path       string
 	ParentPath string
 	StoryPath  string
@@ -25,6 +27,7 @@ type CommentPresenter struct {
 	Score      int64
 	Author     string
 	CreatedAt  time.Time
+	Children   []*CommentPresenter
 }
 
 // CommentTree is a simple tree of comments ordered by score
@@ -34,9 +37,9 @@ type CommentNode struct {
 }
 
 // TODO ordering?
-func NewCommentTree(comments []*Comment) *CommentNode {
+func NewCommentPresentersTree(comments []*Comment) []*CommentPresenter {
 	index := map[sql.NullInt64]*CommentNode{}
-	var root *CommentNode
+	var roots []*CommentNode
 
 	for _, c := range comments {
 		// create the node
@@ -52,7 +55,7 @@ func NewCommentTree(comments []*Comment) *CommentNode {
 		node.Comment = c
 
 		if !c.ParentCommentID.Valid {
-			root = node
+			roots = append(roots, node)
 		}
 
 		// create parent if it doesn't exists yet
@@ -69,19 +72,12 @@ func NewCommentTree(comments []*Comment) *CommentNode {
 		parent.Children = append(parent.Children, node)
 	}
 
-	return root
-}
-
-// parent cannot be nil or it'll crash, but this should never happen
-func add(c *Comment, parent *CommentNode) *CommentNode {
-	node := &CommentNode{
-		Comment:  c,
-		Children: []*CommentNode{},
+	// Turn the nodes into presenters
+	result := []*CommentPresenter{}
+	for _, n := range roots {
+		result = append(result, NewCommentPresenter(n))
 	}
-
-	parent.Children = append(parent.Children, node)
-
-	return node
+	return result
 }
 
 func NewComment(storyID int64, parentCommentID sql.NullInt64, body string, author string) *Comment {
@@ -99,10 +95,19 @@ func (c *Comment) Score() int64 {
 }
 
 // TODO missing fields
-func NewCommentPresenter(c *Comment) *CommentPresenter {
+func NewCommentPresenter(c *CommentNode) *CommentPresenter {
+	var children []*CommentPresenter
+
+	for _, c := range c.Children {
+		children = append(children, NewCommentPresenter(c))
+	}
+
 	return &CommentPresenter{
-		Body:   c.Body,
-		Score:  c.Score(),
-		Author: c.Author,
+		ID:       c.Comment.ID,
+		StoryID:  c.Comment.StoryID,
+		Body:     c.Comment.Body,
+		Score:    c.Comment.Score(),
+		Author:   c.Comment.Author,
+		Children: children,
 	}
 }

@@ -13,7 +13,7 @@ func TestNewCommentOK(t *testing.T) {
 	require.True(t, comment.ParentCommentID.Valid)
 }
 
-func TestNewCommentTree(t *testing.T) {
+func TestNewCommentPresentersTree(t *testing.T) {
 	nilParent := sql.NullInt64{Int64: 0, Valid: false}
 	a := NewComment(1, nilParent, "body", "author")
 	a.ID = 1
@@ -27,6 +27,10 @@ func TestNewCommentTree(t *testing.T) {
 	a21.ID = 5
 	a22 := NewComment(int64(1), sql.NullInt64{Int64: a2.ID, Valid: true}, "", "")
 	a22.ID = 6
+	b := NewComment(1, nilParent, "body", "author")
+	b.ID = 7
+	b1 := NewComment(int64(1), sql.NullInt64{Int64: b.ID, Valid: true}, "", "")
+	b1.ID = 8
 
 	comments := []*Comment{
 		a,
@@ -35,14 +39,18 @@ func TestNewCommentTree(t *testing.T) {
 		a3,
 		a21,
 		a22,
+		b,
+		b1,
 	}
 
-	tree := NewCommentTree(comments)
+	ps := NewCommentPresentersTree(comments)
 
-	require.Equal(t, int64(1), tree.Comment.ID)
-	require.Equal(t, int64(2), tree.Children[0].Comment.ID)
-	require.Equal(t, int64(3), tree.Children[1].Comment.ID)
-	require.Equal(t, int64(4), tree.Children[2].Comment.ID)
-	require.Equal(t, int64(5), tree.Children[1].Children[0].Comment.ID)
-	require.Equal(t, int64(6), tree.Children[1].Children[1].Comment.ID)
+	require.Equal(t, int64(1), ps[0].ID)
+	require.Equal(t, int64(2), ps[0].Children[0].ID)
+	require.Equal(t, int64(3), ps[0].Children[1].ID)
+	require.Equal(t, int64(4), ps[0].Children[2].ID)
+	require.Equal(t, int64(5), ps[0].Children[1].Children[0].ID)
+	require.Equal(t, int64(6), ps[0].Children[1].Children[1].ID)
+	require.Equal(t, int64(7), ps[1].ID)
+	require.Equal(t, int64(8), ps[1].Children[0].ID)
 }

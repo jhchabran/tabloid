@@ -7,6 +7,7 @@
 <div id="post-comment">
 	<form action="/stories/{{.Story.ID}}/comments" method="post" id="submit-form" autocomplete="off">
 		<div class="submit-field">
+			<input type="hidden" name="parent-id" value="">
 			<label for="body">Body: </label>
 			<textarea name="body" id="body" rows="4" required>
 			</textarea>

@@ -2,6 +2,7 @@ package tabloid
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"log"
@@ -150,6 +151,7 @@ func (s *Server) HandleShow() httprouter.Handle {
 		"assets/templates/show.html",
 		"assets/templates/_story.html",
 		"assets/templates/_comment.html",
+		"assets/templates/_comment_form.html",
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html")
 	if err != nil {
@@ -172,14 +174,11 @@ func (s *Server) HandleShow() httprouter.Handle {
 			return
 		}
 
-		commentPresenters := []*CommentPresenter{}
-		for _, c := range comments {
-			commentPresenters = append(commentPresenters, NewCommentPresenter(c))
-		}
+		commentsTree := NewCommentPresentersTree(comments)
 
 		err = tmpl.Execute(res, map[string]interface{}{
 			"Story":    story,
-			"Comments": commentPresenters,
+			"Comments": commentsTree,
 		})
 
 		if err != nil {
@@ -240,11 +239,32 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
 		}
 
+		var comment *Comment
 		body := strings.TrimSpace(req.Form["body"][0])
+		_parentCommentID := req.Form["parent-id"][0]
 
-		comment := &Comment{
-			Body:    body,
-			StoryID: story.ID,
+		// if top-level comment
+		if _parentCommentID == "" {
+			comment = &Comment{
+				Body:    body,
+				StoryID: story.ID,
+			}
+		} else {
+			parentCommentID, err := strconv.Atoi(_parentCommentID)
+			if err != nil {
+				s.Logger.Println(err)
+				http.Error(res, "Cannot parse parent ID", http.StatusUnprocessableEntity)
+				return
+			}
+
+			comment = &Comment{
+				Body:    body,
+				StoryID: story.ID,
+				ParentCommentID: sql.NullInt64{
+					Int64: int64(parentCommentID),
+					Valid: true,
+				},
+			}
 		}
 
 		err = s.store.InsertComment(comment)

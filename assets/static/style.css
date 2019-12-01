@@ -24,3 +24,19 @@ label, input {
 label {
     padding-right: 10px;
 }
+
+
+.trigger + label + div /*This selects the div that is placed after a label that's after a element with 'trigger' class*/
+{
+	display:none; /*hiding the element*/
+}
+
+.trigger /*This selects a element with class 'trigger'*/
+{
+	display:none; /*hiding the element*/
+}
+
+.trigger:checked + label + div /*This selects the div that is placed after a label that's after a CHECKED input with class 'trigger'*/
+{
+	display:block; /*showing the element*/
+}

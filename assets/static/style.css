@@ -25,6 +25,10 @@ label {
     padding-right: 10px;
 }
 
+li.parent-tree-line {
+	border-left: 1px dotted #bbb;
+	padding-left: 10px;
+}
 
 .trigger + label + div /*This selects the div that is placed after a label that's after a element with 'trigger' class*/
 {

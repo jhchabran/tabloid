@@ -231,6 +231,7 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 			s.Logger.Println(err)
 			// TODO deal with 404
 			http.Error(res, "Failed to find story", http.StatusInternalServerError)
+			return
 		}
 
 		err = req.ParseForm()

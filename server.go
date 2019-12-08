@@ -49,6 +49,7 @@ type Server struct {
 }
 
 func init() {
+	// be able to serialize session data in a cookie
 	gob.Register(&oauth2.Token{})
 }
 
@@ -235,12 +236,12 @@ func (s *Server) getGithubStuff(session *sessions.Session) (map[string]interface
 			return nil, err
 		}
 
-		renderData["github_user"] = user
+		renderData["User"] = user
 		fmt.Println(renderData)
 
 		var userMap map[string]interface{}
 		mapstructure.Decode(user, &userMap)
-		renderData["github_user_map"] = userMap
+		renderData["UserMap"] = userMap
 	}
 
 	return renderData, nil
@@ -263,6 +264,11 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		}
 
 		data, err := s.getGithubStuff(session)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			return
+		}
 
 		res.Header().Set("Content-Type", "text/html")
 
@@ -279,8 +285,8 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		}
 
 		vars := map[string]interface{}{
-			"stories": stories,
-			"github":  data,
+			"Stories": stories,
+			"Session": data,
 		}
 
 		err = tmpl.Execute(res, vars)
@@ -301,7 +307,24 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		err = tmpl.Execute(res, nil)
+		session, err := s.sessionStore.Get(req, sessionKey)
+		if err != nil {
+			http.Error(res, "Session aborted", http.StatusInternalServerError)
+			return
+		}
+
+		data, err := s.getGithubStuff(session)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			return
+		}
+
+		vars := map[string]interface{}{
+			"Session": data,
+		}
+
+		err = tmpl.Execute(res, vars)
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)
@@ -324,6 +347,20 @@ func (s *Server) HandleShow() httprouter.Handle {
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
+
+		session, err := s.sessionStore.Get(req, sessionKey)
+		if err != nil {
+			http.Error(res, "Session aborted", http.StatusInternalServerError)
+			return
+		}
+
+		data, err := s.getGithubStuff(session)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			return
+		}
+
 		story, err := s.store.FindStory(params.ByName("id"))
 		if err != nil {
 			s.Logger.Println(err)
@@ -343,6 +380,7 @@ func (s *Server) HandleShow() httprouter.Handle {
 		err = tmpl.Execute(res, map[string]interface{}{
 			"Story":    story,
 			"Comments": commentsTree,
+			"Session":  data,
 		})
 
 		if err != nil {

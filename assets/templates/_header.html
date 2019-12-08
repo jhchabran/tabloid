@@ -30,12 +30,18 @@
 					|
 					show
 					|
+					{{if .Session.User}}
 					<a href="/submit">submit</a>
 					|
+					<img class="avatar" src="{{ .Session.User.AvatarURL }}" alt="...">
+					<a href="/account">{{.Session.User.Login}}</a>
+					|
+					<a href="/oauth/destroy">Logout</a>
+					{{else}}
 					<a href="/oauth/start">Login</a>
+					{{end}}
 					</p>
 				</div>
-
 {{end}}
 
 

@@ -44,3 +44,8 @@ li.parent-tree-line {
 {
 	display:block; /*showing the element*/
 }
+
+.avatar {
+	height: 2em;
+	width: 2em;
+}

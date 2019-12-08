@@ -1,5 +1,21 @@
 {{template "header"}}
 
+<div class="current-user">
+	{{ if .github.github_user }}
+		<h3>Logged in as {{ .github_user.Name }}</h3>
+		<img src="{{ .github.github_user.AvatarURL }}" alt="...">
+		<h3>Data</h3>
+		<ul>
+			{{ range $key, $value := .github_user_map }}
+				<li><strong>{{ $key }}</strong>: {{ $value }}</li>
+			{{ end }}
+		</ul>
+
+	{{ else }}
+		<h3>Not logged in as anyone</h3>
+	{{ end }}
+</div>
+
 <ol>
 	{{range .stories}}
 		{{template "story" .}}

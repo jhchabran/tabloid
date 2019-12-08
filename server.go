@@ -237,7 +237,6 @@ func (s *Server) getGithubStuff(session *sessions.Session) (map[string]interface
 		}
 
 		renderData["User"] = user
-		fmt.Println(renderData)
 
 		var userMap map[string]interface{}
 		mapstructure.Decode(user, &userMap)
@@ -257,16 +256,10 @@ func (s *Server) HandleIndex() httprouter.Handle {
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		session, err := s.sessionStore.Get(req, sessionKey)
-		if err != nil {
-			http.Error(res, "Session aborted", http.StatusInternalServerError)
-			return
-		}
-
-		data, err := s.getGithubStuff(session)
+		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -307,16 +300,10 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		session, err := s.sessionStore.Get(req, sessionKey)
-		if err != nil {
-			http.Error(res, "Session aborted", http.StatusInternalServerError)
-			return
-		}
-
-		data, err := s.getGithubStuff(session)
+		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -348,13 +335,7 @@ func (s *Server) HandleShow() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		session, err := s.sessionStore.Get(req, sessionKey)
-		if err != nil {
-			http.Error(res, "Session aborted", http.StatusInternalServerError)
-			return
-		}
-
-		data, err := s.getGithubStuff(session)
+		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
@@ -480,4 +461,18 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		storyPath := fmt.Sprintf("/stories/%v/comments", story.ID)
 		http.Redirect(res, req, storyPath, http.StatusFound)
 	}
+}
+
+func (s *Server) CurrentUser(req *http.Request) (map[string]interface{}, error) {
+	session, err := s.sessionStore.Get(req, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := s.getGithubStuff(session)
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
 }

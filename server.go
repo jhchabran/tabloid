@@ -227,8 +227,8 @@ func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 }
 
 func (s *Server) getGithubStuff(session *sessions.Session) (map[string]interface{}, error) {
-	renderData := map[string]interface{}{}
 	if accessToken, ok := session.Values["githubAccessToken"].(*oauth2.Token); ok {
+		renderData := map[string]interface{}{}
 		client := github.NewClient(s.oauthConfig.Client(oauth2.NoContext, accessToken))
 
 		user, _, err := client.Users.Get(context.Background(), "")
@@ -241,9 +241,10 @@ func (s *Server) getGithubStuff(session *sessions.Session) (map[string]interface
 		var userMap map[string]interface{}
 		mapstructure.Decode(user, &userMap)
 		renderData["UserMap"] = userMap
+		return renderData, nil
 	}
 
-	return renderData, nil
+	return nil, nil
 }
 
 func (s *Server) HandleIndex() httprouter.Handle {
@@ -304,6 +305,12 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// redirect if unathenticated
+		if data == nil {
+			http.Redirect(res, req, "/", http.StatusFound)
 			return
 		}
 
@@ -376,13 +383,23 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		err := req.ParseForm()
+		data, err := s.CurrentUser(req)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			return
+		}
+		// redirect if unathenticated
+		if data == nil {
+			http.Redirect(res, req, "/", http.StatusFound)
+			return
+		}
+
+		err = req.ParseForm()
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
 		}
-
-		s.Logger.Println(req.Form)
 
 		title := req.Form["title"][0]
 		body := strings.TrimSpace(req.Form["body"][0])

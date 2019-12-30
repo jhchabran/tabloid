@@ -2,24 +2,19 @@ package tabloid
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/base64"
 	"encoding/gob"
-	"encoding/json"
 	"fmt"
 	"html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
+	"github.com/jhchabran/tabloid/authentication"
 	"github.com/julienschmidt/httprouter"
-	"github.com/mitchellh/mapstructure"
 	"golang.org/x/oauth2"
 
 	_ "github.com/lib/pq"
@@ -29,12 +24,6 @@ const (
 	sessionKey = "tabloid-session"
 )
 
-type config struct {
-	ClientSecret string `json:"clientSecret"`
-	ClientID     string `json:"clientID"`
-	ServerSecret string `json:"serverSecret"`
-}
-
 type Server struct {
 	Logger          *log.Logger
 	addr            string
@@ -43,9 +32,8 @@ type Server struct {
 	router          *httprouter.Router
 	done            chan struct{}
 	idleConnsClosed chan struct{}
-	config          config
-	oauthConfig     *oauth2.Config
 	sessionStore    *sessions.CookieStore
+	authService     authentication.AuthService
 }
 
 func init() {
@@ -53,10 +41,11 @@ func init() {
 	gob.Register(&oauth2.Token{})
 }
 
-func NewServer(addr string, store Store) *Server {
+func NewServer(addr string, store Store, authService authentication.AuthService) *Server {
 	return &Server{
 		addr:            addr,
 		store:           store,
+		authService:     authService,
 		router:          httprouter.New(),
 		Logger:          log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
 		done:            make(chan struct{}),
@@ -64,41 +53,9 @@ func NewServer(addr string, store Store) *Server {
 	}
 }
 
-func (s *Server) loadConfig() error {
-	b, err := ioutil.ReadFile("config.json")
-	if err != nil {
-		return err
-	}
-
-	if err = json.Unmarshal(b, &s.config); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *Server) Prepare() error {
-	// github authentication
-	err := s.loadConfig()
-	if err != nil {
-		return err
-	}
-
-	s.sessionStore = sessions.NewCookieStore([]byte(s.config.ServerSecret))
-
-	s.oauthConfig = &oauth2.Config{
-		ClientID:     s.config.ClientID,
-		ClientSecret: s.config.ClientSecret,
-		Endpoint: oauth2.Endpoint{
-			AuthURL:  "https://github.com/login/oauth/authorize",
-			TokenURL: "https://github.com/login/oauth/access_token",
-		},
-		RedirectURL: "",
-		Scopes:      []string{"email"},
-	}
-
 	// database
-	err = s.store.Connect()
+	err := s.store.Connect()
 	if err != nil {
 		return err
 	}
@@ -151,100 +108,20 @@ func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 func (s *Server) HandleOAuthStart() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		b := make([]byte, 16)
-		rand.Read(b)
-
-		state := base64.URLEncoding.EncodeToString(b)
-
-		session, _ := s.sessionStore.Get(req, sessionKey)
-		session.Values["state"] = state
-		session.Save(req, res)
-
-		url := s.oauthConfig.AuthCodeURL(state)
-		http.Redirect(res, req, url, 302)
+		s.authService.Start(res, req)
 	}
 }
 
 func (s *Server) HandleOAuthCallback() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		session, err := s.sessionStore.Get(req, sessionKey)
-		if err != nil {
-			http.Error(res, "Session aborted", http.StatusInternalServerError)
-			return
-		}
-
-		if req.URL.Query().Get("state") != session.Values["state"] {
-			http.Error(res, "no state match; possible csrf OR cookies not enabled", http.StatusInternalServerError)
-			return
-		}
-
-		token, err := s.oauthConfig.Exchange(oauth2.NoContext, req.URL.Query().Get("code"))
-		if err != nil {
-			http.Error(res, "there was an issue getting your token", http.StatusInternalServerError)
-			return
-		}
-
-		if !token.Valid() {
-			http.Error(res, "retreived invalid token", http.StatusBadRequest)
-			return
-		}
-
-		client := github.NewClient(s.oauthConfig.Client(oauth2.NoContext, token))
-
-		user, _, err := client.Users.Get(context.Background(), "")
-		if err != nil {
-			http.Error(res, "error getting name", http.StatusInternalServerError)
-			return
-		}
-
-		session.Values["githubUserName"] = user.Name
-		session.Values["githubAccessToken"] = token
-		err = session.Save(req, res)
-		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "could not save session", http.StatusInternalServerError)
-			return
-		}
-
-		http.Redirect(res, req, "/", 302)
+		s.authService.Callback(res, req)
 	}
 }
 
 func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
-		session, err := s.sessionStore.Get(req, sessionKey)
-		if err != nil {
-			http.Error(res, "aborted", http.StatusInternalServerError)
-			return
-		}
-
-		// TODO put a sensible value in there
-		session.Options.MaxAge = -1
-
-		session.Save(req, res)
-		http.Redirect(res, req, "/", 302)
+		s.authService.Destroy(res, req)
 	}
-}
-
-func (s *Server) getGithubStuff(session *sessions.Session) (map[string]interface{}, error) {
-	if accessToken, ok := session.Values["githubAccessToken"].(*oauth2.Token); ok {
-		renderData := map[string]interface{}{}
-		client := github.NewClient(s.oauthConfig.Client(oauth2.NoContext, accessToken))
-
-		user, _, err := client.Users.Get(context.Background(), "")
-		if err != nil {
-			return nil, err
-		}
-
-		renderData["User"] = user
-
-		var userMap map[string]interface{}
-		mapstructure.Decode(user, &userMap)
-		renderData["UserMap"] = userMap
-		return renderData, nil
-	}
-
-	return nil, nil
 }
 
 func (s *Server) HandleIndex() httprouter.Handle {
@@ -481,15 +358,5 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 }
 
 func (s *Server) CurrentUser(req *http.Request) (map[string]interface{}, error) {
-	session, err := s.sessionStore.Get(req, sessionKey)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := s.getGithubStuff(session)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
+	return s.authService.CurrentUser(req)
 }

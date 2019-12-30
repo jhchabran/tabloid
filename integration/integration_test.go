@@ -1,15 +1,19 @@
 package integration
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid"
+	"github.com/jhchabran/tabloid/authentication/fake_auth"
 	"github.com/jhchabran/tabloid/pgstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -17,7 +21,10 @@ import (
 
 type IntegrationTestSuite struct {
 	suite.Suite
-	pgStore *pgstore.PGStore
+	pgStore    *pgstore.PGStore
+	fakeAuth   *fake_auth.Handler
+	testServer *httptest.Server
+	server     *tabloid.Server
 }
 
 func (suite *IntegrationTestSuite) SetupTest() {
@@ -26,6 +33,17 @@ func (suite *IntegrationTestSuite) SetupTest() {
 		suite.FailNow("%v", err)
 	}
 	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
+
+	cookieJar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Jar: cookieJar,
+	}
+	sessionStore := sessions.NewCookieStore([]byte("test"))
+
+	suite.fakeAuth = fake_auth.New(sessionStore)
+	suite.server = tabloid.NewServer("localhost:8081", suite.pgStore, suite.fakeAuth)
+	suite.testServer = httptest.NewServer(suite.server)
+	suite.fakeAuth.SetServerURL(suite.testServer.URL)
 }
 
 func (suite *IntegrationTestSuite) TearDownTest() {
@@ -41,13 +59,10 @@ func TestIntegrationTestSuite(t *testing.T) {
 func (suite *IntegrationTestSuite) TestEmptyIndex() {
 	t := suite.T()
 
-	s := tabloid.NewServer("localhost:8081", suite.pgStore)
-	assert.Nil(t, s.Prepare())
+	assert.Nil(t, suite.server.Prepare())
+	defer suite.testServer.Close()
 
-	ts := httptest.NewServer(s)
-	defer ts.Close()
-
-	resp, err := http.Get(ts.URL)
+	resp, err := http.Get(suite.testServer.URL)
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, 200, resp.StatusCode)
@@ -56,11 +71,8 @@ func (suite *IntegrationTestSuite) TestEmptyIndex() {
 
 func (suite *IntegrationTestSuite) TestIndexWithStory() {
 	t := suite.T()
-	s := tabloid.NewServer("localhost:8081", suite.pgStore)
-	assert.Nil(t, s.Prepare())
-
-	ts := httptest.NewServer(s)
-	defer ts.Close()
+	assert.Nil(t, suite.server.Prepare())
+	defer suite.testServer.Close()
 
 	err := suite.pgStore.InsertStory(&tabloid.Story{
 		Title: "Foobar",
@@ -69,7 +81,7 @@ func (suite *IntegrationTestSuite) TestIndexWithStory() {
 
 	assert.Nil(t, err)
 
-	resp, err := http.Get(ts.URL)
+	resp, err := http.Get(suite.testServer.URL)
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, 200, resp.StatusCode)
@@ -86,14 +98,22 @@ func (suite *IntegrationTestSuite) TestIndexWithStory() {
 
 func (suite *IntegrationTestSuite) TestSubmitStory() {
 	t := suite.T()
-	s := tabloid.NewServer("localhost:8081", suite.pgStore)
-	assert.Nil(t, s.Prepare())
+	assert.Nil(t, suite.server.Prepare())
 
-	ts := httptest.NewServer(s)
-	defer ts.Close()
+	defer suite.testServer.Close()
+
+	client := &http.Client{
+		CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
+	assert.Nil(t, err)
+	if resp != nil {
+		fmt.Println(resp)
+		assert.Equal(t, 200, resp.StatusCode)
+	}
 
 	// test for the form being rendered
-	resp, err := http.Get(ts.URL + "/submit")
+	resp, err = http.Get(suite.testServer.URL + "/submit")
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, 200, resp.StatusCode)
@@ -112,10 +132,7 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 		"url":   []string{"http://duckduckgo.com"},
 		"body":  []string{"foobar"},
 	}
-	client := &http.Client{
-		CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
-	}
-	resp, err = client.PostForm(ts.URL+"/submit", values)
+	resp, err = client.PostForm(suite.testServer.URL+"/submit", values)
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, http.StatusFound, resp.StatusCode)

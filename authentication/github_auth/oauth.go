@@ -128,6 +128,11 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	err = h.LoadUserData(req)
+	if err != nil {
+		http.Error(res, "couldn't load user data from Github", 500)
+		return
+	}
 	http.Redirect(res, req, "/", 302)
 }
 

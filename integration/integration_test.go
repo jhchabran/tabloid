@@ -1,7 +1,6 @@
 package integration
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -33,11 +32,6 @@ func (suite *IntegrationTestSuite) SetupTest() {
 		suite.FailNow("%v", err)
 	}
 	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
-
-	cookieJar, _ := cookiejar.New(nil)
-	client := &http.Client{
-		Jar: cookieJar,
-	}
 	sessionStore := sessions.NewCookieStore([]byte("test"))
 
 	suite.fakeAuth = fake_auth.New(sessionStore)
@@ -99,16 +93,15 @@ func (suite *IntegrationTestSuite) TestIndexWithStory() {
 func (suite *IntegrationTestSuite) TestSubmitStory() {
 	t := suite.T()
 	assert.Nil(t, suite.server.Prepare())
-
 	defer suite.testServer.Close()
 
+	cookieJar, _ := cookiejar.New(nil)
 	client := &http.Client{
-		CheckRedirect: func(r *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+		Jar: cookieJar,
 	}
 	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
 	assert.Nil(t, err)
 	if resp != nil {
-		fmt.Println(resp)
 		assert.Equal(t, 200, resp.StatusCode)
 	}
 
@@ -135,15 +128,8 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 	resp, err = client.PostForm(suite.testServer.URL+"/submit", values)
 	assert.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, http.StatusFound, resp.StatusCode)
+		assert.Equal(t, 200, resp.StatusCode)
 	}
-
-	// test for the redirection to the root page
-	redirectTo, err := resp.Location()
-	assert.Nil(t, err)
-
-	resp, err = client.Get(redirectTo.String())
-	assert.Nil(t, err)
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
@@ -151,5 +137,5 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 
 	assert.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
 	assert.True(t, strings.Contains(string(body), "Captain Nemo"))
-	assert.True(t, strings.Contains(string(body), "http://duckduckgo.com"))
+	assert.True(t, strings.Contains(string(body), "href=\"http://duckduckgo.com\""))
 }

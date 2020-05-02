@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
+	"github.com/jhchabran/tabloid/authentication"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/oauth2"
 )
@@ -18,6 +19,9 @@ const (
 )
 
 type Handler struct {
+	user *authentication.User
+	// useless atm, but keeping around to dig around whatever I could need
+	// at this stage.
 	userData     map[string]interface{}
 	sessionStore *sessions.CookieStore
 	clientID     string
@@ -59,6 +63,11 @@ func (h *Handler) LoadUserData(req *http.Request) error {
 			return err
 		}
 
+		h.user = &authentication.User{
+			Login:     *user.Login,
+			AvatarURL: *user.AvatarURL,
+		}
+
 		h.userData["User"] = user
 
 		var userMap map[string]interface{}
@@ -70,8 +79,8 @@ func (h *Handler) LoadUserData(req *http.Request) error {
 	return nil
 }
 
-func (h *Handler) CurrentUser(req *http.Request) (map[string]interface{}, error) {
-	return h.userData, nil
+func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
+	return h.user, nil
 }
 
 func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
@@ -119,6 +128,7 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// TODO it seems I don't need this at all.
 	session.Values["githubUserName"] = user.Name
 	session.Values["githubAccessToken"] = token
 	err = session.Save(req, res)
@@ -145,7 +155,11 @@ func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 
 	// kill the session
 	session.Options.MaxAge = -1
-
 	session.Save(req, res)
+
+	// drop state
+	h.userData = nil
+	h.user = nil
+
 	http.Redirect(res, req, "/", 302)
 }

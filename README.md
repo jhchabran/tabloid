@@ -21,3 +21,15 @@ make migrate
 go run cmd/main.go
 open "http://localhost:8080"
 ```
+
+## Todo
+
+### Features
+
+- [ ] should create user when login in.
+  - extraxt email as well
+- [ ] should update logged at when signing in if already exists
+
+### Bugs
+
+- [ ] fails to load user data when asked to login on Github. Will work fine if already logged in.

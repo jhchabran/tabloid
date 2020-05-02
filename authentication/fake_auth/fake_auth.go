@@ -3,14 +3,15 @@ package fake_auth
 import (
 	"net/http"
 
-	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
+	"github.com/jhchabran/tabloid/authentication"
 )
 
 const cookieKey = "fake_auth_key"
 
 type Handler struct {
 	userData     map[string]interface{}
+	user         *authentication.User
 	sessionStore *sessions.CookieStore
 	serverUrl    string
 }
@@ -29,8 +30,8 @@ func (h *Handler) LoadUserData(req *http.Request) error {
 	return nil
 }
 
-func (h *Handler) CurrentUser(req *http.Request) (map[string]interface{}, error) {
-	return h.userData, nil
+func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
+	return h.user, nil
 }
 
 func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
@@ -56,19 +57,14 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// TODO do I need this?
 	session.Values["githubUserName"] = "jhchabran"
 	session.Values["githubAccessToken"] = "test-token"
 
-	// TODO do I need this?
-	h.userData = map[string]interface{}{}
-	login := "fakeLogin"
-	avatarURL := "https://www.placecage.com/g/200/200"
-	h.userData["User"] = &github.User{
-		Login:     &login,
-		AvatarURL: &avatarURL,
+	h.user = &authentication.User{
+		Login:     "fakeLogin",
+		AvatarURL: "https://www.placecage.com/g/200/200",
 	}
-
-	h.userData["UserMap"] = map[string]interface{}{}
 
 	err = session.Save(req, res)
 	if err != nil {

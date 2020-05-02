@@ -12,6 +12,7 @@ type Comment struct {
 	Body            string        `db:"body"`
 	Upvotes         int64         `db:"upvotes"`
 	Downvotes       int64         `db:"downvotes"`
+	AuthorID        int64         `db:"author_id"`
 	Author          string        `db:"author"`
 	CreatedAt       time.Time     `db:"created_at"`
 }
@@ -80,12 +81,12 @@ func NewCommentPresentersTree(comments []*Comment) []*CommentPresenter {
 	return result
 }
 
-func NewComment(storyID int64, parentCommentID sql.NullInt64, body string, author string) *Comment {
+func NewComment(storyID int64, parentCommentID sql.NullInt64, body string, authorID int64) *Comment {
 	return &Comment{
 		ParentCommentID: parentCommentID,
 		StoryID:         storyID,
 		Body:            body,
-		Author:          author,
+		AuthorID:        authorID,
 		CreatedAt:       time.Now(),
 	}
 }

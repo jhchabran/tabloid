@@ -9,15 +9,16 @@ type Story struct {
 	Body      string    `db:"body"`
 	Score     int64     `db:"score"`
 	Author    string    `db:"author"`
+	AuthorID  int64     `db:"author_id"`
 	CreatedAt time.Time `db:"created_at"`
 }
 
-func NewStory(title string, body string, author string) *Story {
+func NewStory(title string, body string, authorID int64) *Story {
 	return &Story{
 		Title:     title,
 		Body:      body,
 		Score:     1,
-		Author:    author,
+		AuthorID:  authorID,
 		CreatedAt: time.Now(),
 	}
 }

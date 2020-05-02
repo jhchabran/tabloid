@@ -7,4 +7,6 @@ type Store interface {
 	InsertStory(item *Story) error
 	ListComments(storyID string) ([]*Comment, error)
 	InsertComment(comment *Comment) error
+	FindUserByLogin(login string) (*User, error)
+	CreateOrUpdateUser(login string, email string) error
 }

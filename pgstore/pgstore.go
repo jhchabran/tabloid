@@ -36,7 +36,7 @@ func (s *PGStore) DB() *sqlx.DB {
 
 func (s *PGStore) ListStories() ([]*tabloid.Story, error) {
 	stories := []*tabloid.Story{}
-	err := s.db.Select(&stories, "SELECT * FROM stories ORDER BY created_at DESC")
+	err := s.db.Select(&stories, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (s *PGStore) ListStories() ([]*tabloid.Story, error) {
 
 func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 	story := tabloid.Story{}
-	err := s.db.Get(&story, "SELECT * FROM stories WHERE id=$1", ID)
+	err := s.db.Get(&story, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id WHERE id=$1", ID)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +56,8 @@ func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 
 func (s *PGStore) InsertStory(story *tabloid.Story) error {
 	var id int64
-	err := s.db.Get(&id, "INSERT INTO stories (title, url, body, score, author, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-		story.Title, story.URL, story.Body, story.Score, story.Author, time.Now(),
+	err := s.db.Get(&id, "INSERT INTO stories (title, url, body, score, author_id, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+		story.Title, story.URL, story.Body, story.Score, story.AuthorID, time.Now(),
 	)
 
 	if err != nil {
@@ -71,7 +71,7 @@ func (s *PGStore) InsertStory(story *tabloid.Story) error {
 
 func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 	comments := []*tabloid.Comment{}
-	err := s.db.Select(&comments, "SELECT * FROM comments WHERE story_id=$1 ORDER BY created_at DESC", storyID)
+	err := s.db.Select(&comments, "SELECT comments.*, users.name as author FROM comments JOIN users ON comments.author_id = users.id WHERE story_id=$1 ORDER BY comments.created_at DESC", storyID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +81,8 @@ func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 
 func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	var id int64
-	err := s.db.Get(&id, "INSERT INTO comments (story_id, parent_comment_id, body, upvotes, downvotes, author, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-		comment.StoryID, comment.ParentCommentID, comment.Body, comment.Upvotes, comment.Downvotes, comment.Author, time.Now(),
+	err := s.db.Get(&id, "INSERT INTO comments (story_id, parent_comment_id, body, upvotes, downvotes, author_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+		comment.StoryID, comment.ParentCommentID, comment.Body, comment.Upvotes, comment.Downvotes, comment.AuthorID, time.Now(),
 	)
 
 	if err != nil {
@@ -90,6 +90,26 @@ func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	}
 
 	comment.ID = id
+
+	return nil
+}
+
+func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
+	user := tabloid.User{}
+	err := s.db.Get(&user, "SELECT * FROM users WHERE name=$1", name)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}
+
+func (s *PGStore) CreateOrUpdateUser(login string, email string) error {
+	_, err := s.db.Exec("INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3) ON CONFlICT (name) DO UPDATE SET last_login_at = $4 ", login, email, time.Now(), time.Now())
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -5,6 +5,6 @@ CREATE TABLE comments (
 	upvotes integer,
 	downvotes integer,
 	body text,
-	author varchar(255),
-	created_at timestamp
+	author_id integer NOT NULL,
+	created_at timestamp NOT NULL
 );

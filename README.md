@@ -26,9 +26,9 @@ open "http://localhost:8080"
 
 ### Features
 
-- [ ] should create user when login in.
-  - extraxt email as well
-- [ ] should update logged at when signing in if already exists
+- [x] should create user when login in.
+  - [ ] extraxt email as well
+- [x] should update logged at when signing in if already exists
 
 ### Bugs
 

@@ -115,6 +115,7 @@ func (s *Server) HandleOAuthStart() httprouter.Handle {
 func (s *Server) HandleOAuthCallback() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		// need to think about error handling here
+		// probably a before write callback is good enough?
 		s.authService.Callback(res, req)
 
 		u, err := s.CurrentUser(req)

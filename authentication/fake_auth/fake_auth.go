@@ -2,6 +2,7 @@ package fake_auth
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
@@ -14,6 +15,7 @@ type Handler struct {
 	user         *authentication.User
 	sessionStore *sessions.CookieStore
 	serverUrl    string
+	counter      int // used to return a different user for each auth
 }
 
 func New(sessionStore *sessions.CookieStore) *Handler {
@@ -58,11 +60,11 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 	}
 
 	// TODO do I need this?
-	session.Values["githubUserName"] = "jhchabran"
+	session.Values["githubUserName"] = "fakeLogin" + strconv.Itoa(h.counter)
 	session.Values["githubAccessToken"] = "test-token"
 
 	h.user = &authentication.User{
-		Login:     "fakeLogin",
+		Login:     "fakeLogin" + strconv.Itoa(h.counter),
 		AvatarURL: "https://www.placecage.com/g/200/200",
 	}
 

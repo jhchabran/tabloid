@@ -105,7 +105,7 @@ func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
 }
 
 func (s *PGStore) CreateOrUpdateUser(login string, email string) error {
-	_, err := s.db.Exec("INSERT INTO users (name, email, created_at) VALUES ($1, $2, $3) ON CONFlICT (name) DO UPDATE SET last_login_at = $4 ", login, email, time.Now(), time.Now())
+	_, err := s.db.Exec("INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5 ", login, email, time.Now(), time.Now(), time.Now())
 
 	if err != nil {
 		return err

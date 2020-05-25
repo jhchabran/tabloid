@@ -46,7 +46,7 @@ func (s *PGStore) ListStories() ([]*tabloid.Story, error) {
 
 func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 	story := tabloid.Story{}
-	err := s.db.Get(&story, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id WHERE id=$1", ID)
+	err := s.db.Get(&story, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id WHERE stories.id=$1", ID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +105,8 @@ func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
 }
 
 func (s *PGStore) CreateOrUpdateUser(login string, email string) error {
-	_, err := s.db.Exec("INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5 ", login, email, time.Now(), time.Now(), time.Now())
+	now := time.Now()
+	_, err := s.db.Exec("INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5", login, email, now, now, now)
 
 	if err != nil {
 		return err

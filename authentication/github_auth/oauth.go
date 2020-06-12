@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -19,10 +21,8 @@ const (
 )
 
 type Handler struct {
-	user *authentication.User
 	// useless atm, but keeping around to dig around whatever I could need
 	// at this stage.
-	userData     map[string]interface{}
 	sessionStore *sessions.CookieStore
 	clientID     string
 	clientSecret string
@@ -48,39 +48,71 @@ func New(serverSecret string, clientID string, clientSecret string) *Handler {
 	}
 }
 
-func (h *Handler) LoadUserData(req *http.Request) error {
+// TODO comment that properly
+// side effect: load into session
+// returns what was stored in the session
+func (h *Handler) LoadUserData(req *http.Request, res http.ResponseWriter) (*authentication.User, error) {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if accessToken, ok := session.Values["githubAccessToken"].(*oauth2.Token); ok {
-		h.userData = map[string]interface{}{}
-		client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, accessToken))
-
-		user, _, err := client.Users.Get(context.Background(), "")
-		if err != nil {
-			return err
-		}
-
-		h.user = &authentication.User{
-			Login:     *user.Login,
-			AvatarURL: *user.AvatarURL,
-		}
-
-		h.userData["User"] = user
-
-		var userMap map[string]interface{}
-		mapstructure.Decode(user, &userMap)
-		h.userData["UserMap"] = userMap
-		return nil
+	accessToken, ok := session.Values["githubAccessToken"].(*oauth2.Token)
+	if !ok {
+		return nil, fmt.Errorf("inconsistent state")
 	}
 
-	return nil
+	userData := map[string]interface{}{}
+	client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, accessToken))
+
+	user, _, err := client.Users.Get(context.Background(), "")
+	if err != nil {
+		return nil, err
+	}
+
+	userSession := &authentication.User{
+		Login:     *user.Login,
+		AvatarURL: *user.AvatarURL,
+	}
+
+	userData["User"] = user
+
+	var userMap map[string]interface{}
+	mapstructure.Decode(user, &userMap)
+	userData["UserMap"] = userMap
+
+	b, err := json.Marshal(userSession)
+	if err != nil {
+		return nil, err
+	}
+
+	session.Values["user"] = b
+	if err := session.Save(req, res); err != nil {
+		return nil, err
+	}
+
+	return userSession, nil
 }
 
 func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
-	return h.user, nil
+	session, err := h.sessionStore.Get(req, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var b []byte
+	b, ok := session.Values["user"].([]byte)
+	if !ok {
+		return nil, nil
+	}
+
+	var userSession authentication.User
+	err = json.Unmarshal(b, &userSession)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userSession, nil
 }
 
 func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
@@ -120,25 +152,25 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, token))
+	// client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, token))
 
-	user, _, err := client.Users.Get(context.Background(), "")
+	// user, _, err := client.Users.Get(context.Background(), "")
 	if err != nil {
 		http.Error(res, "error getting name", http.StatusInternalServerError)
 		return
 	}
 
 	// TODO it seems I don't need this at all.
-	session.Values["githubUserName"] = user.Name
-	session.Values["githubAccessToken"] = token
-	err = session.Save(req, res)
+	// session.Values["githubUserName"] = user.Name
+	// session.Values["githubAccessToken"] = token
+	// err = session.Save(req, res)
 	if err != nil {
 		h.logger.Println(err)
 		http.Error(res, "could not save session", http.StatusInternalServerError)
 		return
 	}
 
-	err = h.LoadUserData(req)
+	_, err = h.LoadUserData(req, res)
 	if err != nil {
 		http.Error(res, "couldn't load user data from Github", 500)
 		return
@@ -155,11 +187,8 @@ func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 
 	// kill the session
 	session.Options.MaxAge = -1
+	session.Values["user"] = nil // TODO max age probably makes this unnecessary
 	session.Save(req, res)
-
-	// drop state
-	h.userData = nil
-	h.user = nil
 
 	http.Redirect(res, req, "/", 302)
 }

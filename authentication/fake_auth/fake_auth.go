@@ -1,6 +1,8 @@
 package fake_auth
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -8,7 +10,7 @@ import (
 	"github.com/jhchabran/tabloid/authentication"
 )
 
-const cookieKey = "fake_auth_key"
+const sessionKey = "fake_auth_key"
 
 type Handler struct {
 	userData     map[string]interface{}
@@ -28,16 +30,56 @@ func (h *Handler) SetServerURL(url string) {
 	h.serverUrl = url
 }
 
-func (h *Handler) LoadUserData(req *http.Request) error {
-	return nil
+func (h *Handler) LoadUserData(req *http.Request, res http.ResponseWriter) (*authentication.User, error) {
+	session, err := h.sessionStore.Get(req, sessionKey)
+	if err != nil {
+		return nil, err
+	} // TODO do I need this?
+
+	session.Values["githubUserName"] = "fakeLogin" + strconv.Itoa(h.counter)
+	session.Values["githubAccessToken"] = "test-token"
+
+	userSession := &authentication.User{
+		Login:     "fakeLogin" + strconv.Itoa(h.counter),
+		AvatarURL: "https://www.placecage.com/g/200/200",
+	}
+	b, err := json.Marshal(userSession)
+	if err != nil {
+		return nil, err
+	}
+
+	session.Values["user"] = b
+	if err := session.Save(req, res); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
 
 func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
-	return h.user, nil
+	session, err := h.sessionStore.Get(req, sessionKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var b []byte
+	b, ok := session.Values["user"].([]byte)
+	if !ok {
+		log.Println("no session")
+		return nil, nil
+	}
+
+	var userSession authentication.User
+	err = json.Unmarshal(b, &userSession)
+	if err != nil {
+		return nil, err
+	}
+
+	return &userSession, nil
 }
 
 func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
-	session, err := h.sessionStore.Get(req, cookieKey)
+	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
 		panic(err)
 	}
@@ -53,24 +95,9 @@ func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 }
 
 func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
-	session, err := h.sessionStore.Get(req, cookieKey)
+	_, err := h.LoadUserData(req, res)
 	if err != nil {
-		http.Error(res, "session aborted", http.StatusInternalServerError)
-		return
-	}
-
-	// TODO do I need this?
-	session.Values["githubUserName"] = "fakeLogin" + strconv.Itoa(h.counter)
-	session.Values["githubAccessToken"] = "test-token"
-
-	h.user = &authentication.User{
-		Login:     "fakeLogin" + strconv.Itoa(h.counter),
-		AvatarURL: "https://www.placecage.com/g/200/200",
-	}
-
-	err = session.Save(req, res)
-	if err != nil {
-		http.Error(res, "couldn't save session", http.StatusInternalServerError)
+		http.Error(res, "couldn't load user data from fake auth", 500)
 		return
 	}
 
@@ -79,7 +106,7 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 
 func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 	// TODO error
-	session, _ := h.sessionStore.Get(req, cookieKey)
+	session, _ := h.sessionStore.Get(req, sessionKey)
 	session.Options.MaxAge = -1
 	session.Save(req, res)
 

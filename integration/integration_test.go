@@ -115,14 +115,17 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 		assert.Equal(t, 200, resp.StatusCode)
 	}
 
+	body, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
 	// test for the form being rendered
-	resp, err = http.Get(suite.testServer.URL + "/submit")
+	resp, err = client.Get(suite.testServer.URL + "/submit")
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, 200, resp.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	assert.Nil(t, err)
 

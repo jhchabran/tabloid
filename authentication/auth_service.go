@@ -14,7 +14,7 @@ type OAuthHandler interface {
 type AuthService interface {
 	OAuthHandler
 	CurrentUser(req *http.Request) (*User, error)
-	LoadUserData(req *http.Request) error
+	LoadUserData(req *http.Request, res http.ResponseWriter) (*User, error)
 }
 
 // A User is a convenient structure to hold user data coming from Github.

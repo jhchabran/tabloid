@@ -125,6 +125,7 @@ func (s *Server) HandleOAuthCallback() httprouter.Handle {
 
 		err = s.store.CreateOrUpdateUser(u.Login, "email")
 		if err != nil {
+			// TODO dirty
 			s.Logger.Fatal(err)
 		}
 	}
@@ -149,7 +150,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Println(err)
-			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
+			http.Error(res, "Could not fetch session data", http.StatusInternalServerError)
 			return
 		}
 

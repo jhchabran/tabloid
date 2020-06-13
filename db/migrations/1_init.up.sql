@@ -4,6 +4,6 @@ CREATE TABLE stories (
 	url varchar(255),
 	body text,
 	score integer,
-	author varchar(255),
-	created_at timestamp
+	author_id integer NOT NULL,
+	created_at timestamp NOT NULL
 );

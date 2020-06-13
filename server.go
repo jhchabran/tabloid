@@ -114,7 +114,20 @@ func (s *Server) HandleOAuthStart() httprouter.Handle {
 
 func (s *Server) HandleOAuthCallback() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+		// need to think about error handling here
+		// probably a before write callback is good enough?
 		s.authService.Callback(res, req)
+
+		u, err := s.CurrentUser(req)
+		if err != nil {
+			s.Logger.Fatal(err)
+		}
+
+		err = s.store.CreateOrUpdateUser(u.Login, "email")
+		if err != nil {
+			// TODO dirty
+			s.Logger.Fatal(err)
+		}
 	}
 }
 
@@ -137,7 +150,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Println(err)
-			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
+			http.Error(res, "Could not fetch session data", http.StatusInternalServerError)
 			return
 		}
 
@@ -178,7 +191,7 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		data, err := s.CurrentUser(req)
+		userSession, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
@@ -186,13 +199,13 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 		}
 
 		// redirect if unathenticated
-		if data == nil {
+		if userSession == nil {
 			http.Redirect(res, req, "/", http.StatusFound)
 			return
 		}
 
 		vars := map[string]interface{}{
-			"Session": data,
+			"Session": userSession,
 		}
 
 		err = tmpl.Execute(res, vars)
@@ -276,17 +289,34 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		if err != nil {
 			s.Logger.Println(err)
 			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
+			return
 		}
 
+		// handle form
 		title := req.Form["title"][0]
 		body := strings.TrimSpace(req.Form["body"][0])
 		url := req.Form["url"][0]
 
+		// grab author stuff
+		userSession, err := s.authService.CurrentUser(req)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch current user", http.StatusInternalServerError)
+			return
+		}
+
+		userRecord, err := s.store.FindUserByLogin(userSession.Login)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch user from database", http.StatusInternalServerError)
+			return
+		}
+
 		story := &Story{
-			Author: "Thomas",
-			Title:  title,
-			Body:   body,
-			URL:    url,
+			AuthorID: userRecord.ID,
+			Title:    title,
+			Body:     body,
+			URL:      url,
 		}
 
 		err = s.store.InsertStory(story)
@@ -357,6 +387,6 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	}
 }
 
-func (s *Server) CurrentUser(req *http.Request) (map[string]interface{}, error) {
+func (s *Server) CurrentUser(req *http.Request) (*authentication.User, error) {
 	return s.authService.CurrentUser(req)
 }

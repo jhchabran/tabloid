@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid"
@@ -24,6 +25,8 @@ type IntegrationTestSuite struct {
 	fakeAuth   *fake_auth.Handler
 	testServer *httptest.Server
 	server     *tabloid.Server
+	// used to reference an existing user
+	existingUserID int64
 }
 
 func (suite *IntegrationTestSuite) SetupTest() {
@@ -38,12 +41,21 @@ func (suite *IntegrationTestSuite) SetupTest() {
 	suite.server = tabloid.NewServer("localhost:8081", suite.pgStore, suite.fakeAuth)
 	suite.testServer = httptest.NewServer(suite.server)
 	suite.fakeAuth.SetServerURL(suite.testServer.URL)
+
+	assert.Nil(suite.T(), suite.server.Prepare())
+	// inserts first user used for existing posts, with id=1
+	err = suite.pgStore.DB().Get(&suite.existingUserID,
+		"INSERT INTO users (name, email, created_at, last_login_at) VALUES ('alpha', 'alpha@email.com', $1, $2) RETURNING id",
+		time.Now(), time.Now())
+	suite.NoError(err, suite.T())
 }
 
 func (suite *IntegrationTestSuite) TearDownTest() {
+	defer suite.testServer.Close()
 	os.Chdir("integration")
 	suite.pgStore.DB().MustExec("TRUNCATE TABLE stories;")
 	suite.pgStore.DB().MustExec("TRUNCATE TABLE comments;")
+	suite.pgStore.DB().MustExec("TRUNCATE TABLE users;")
 }
 
 func TestIntegrationTestSuite(t *testing.T) {
@@ -52,9 +64,6 @@ func TestIntegrationTestSuite(t *testing.T) {
 
 func (suite *IntegrationTestSuite) TestEmptyIndex() {
 	t := suite.T()
-
-	assert.Nil(t, suite.server.Prepare())
-	defer suite.testServer.Close()
 
 	resp, err := http.Get(suite.testServer.URL)
 	assert.Nil(t, err)
@@ -65,18 +74,21 @@ func (suite *IntegrationTestSuite) TestEmptyIndex() {
 
 func (suite *IntegrationTestSuite) TestIndexWithStory() {
 	t := suite.T()
-	assert.Nil(t, suite.server.Prepare())
-	defer suite.testServer.Close()
 
 	err := suite.pgStore.InsertStory(&tabloid.Story{
-		Title: "Foobar",
-		URL:   "http://foobar.com",
+		Title:     "Foobar",
+		URL:       "http://foobar.com",
+		Score:     1,
+		Body:      "Foobaring",
+		AuthorID:  suite.existingUserID,
+		CreatedAt: time.Now(),
 	})
-
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	resp, err := http.Get(suite.testServer.URL)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
 	if resp != nil {
 		assert.Equal(t, 200, resp.StatusCode)
 	}
@@ -92,8 +104,6 @@ func (suite *IntegrationTestSuite) TestIndexWithStory() {
 
 func (suite *IntegrationTestSuite) TestSubmitStory() {
 	t := suite.T()
-	assert.Nil(t, suite.server.Prepare())
-	defer suite.testServer.Close()
 
 	cookieJar, _ := cookiejar.New(nil)
 	client := &http.Client{
@@ -105,14 +115,17 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 		assert.Equal(t, 200, resp.StatusCode)
 	}
 
+	body, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
 	// test for the form being rendered
-	resp, err = http.Get(suite.testServer.URL + "/submit")
+	resp, err = client.Get(suite.testServer.URL + "/submit")
 	assert.Nil(t, err)
 	if resp != nil {
 		assert.Equal(t, 200, resp.StatusCode)
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	assert.Nil(t, err)
 

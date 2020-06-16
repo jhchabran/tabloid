@@ -1,12 +1,11 @@
 {{define "story"}}
 <li class="story">
-	<a href="{{.URL}}">
-		{{.Title}}
-	</a>
+	<a href="{{.URL}}">{{.Title}}</a>
 	<br/>
 	<small>
 		{{.Score}} by {{.Author}} at {{.CreatedAt}}
 		<a href="/stories/{{.ID}}/comments">Comments</a>
 	</small>
+	<p>{{.Body}}</p>
 </li>
 {{end}}

@@ -230,6 +230,7 @@ func (s *Server) HandleShow() httprouter.Handle {
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		s.Logger.Println("handle show")
 		res.Header().Set("Content-Type", "text/html")
 
 		data, err := s.CurrentUser(req)
@@ -347,32 +348,36 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
 		}
 
+		// prepare the user
+		userSession, err := s.authService.CurrentUser(req)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch current user", http.StatusInternalServerError)
+			return
+		}
+
+		userRecord, err := s.store.FindUserByLogin(userSession.Login)
+		if err != nil {
+			s.Logger.Println(err)
+			http.Error(res, "Couldn't fetch user from database", http.StatusInternalServerError)
+			return
+		}
+
 		var comment *Comment
 		body := strings.TrimSpace(req.Form["body"][0])
 		_parentCommentID := req.Form["parent-id"][0]
 
-		// if top-level comment
-		if _parentCommentID == "" {
-			comment = &Comment{
-				Body:    body,
-				StoryID: story.ID,
-			}
-		} else {
+		// if not top-level comment
+		if _parentCommentID != "" {
 			parentCommentID, err := strconv.Atoi(_parentCommentID)
 			if err != nil {
 				s.Logger.Println(err)
 				http.Error(res, "Cannot parse parent ID", http.StatusUnprocessableEntity)
 				return
 			}
-
-			comment = &Comment{
-				Body:    body,
-				StoryID: story.ID,
-				ParentCommentID: sql.NullInt64{
-					Int64: int64(parentCommentID),
-					Valid: true,
-				},
-			}
+			comment = NewComment(story.ID, sql.NullInt64{Int64: int64(parentCommentID), Valid: true}, body, userRecord.ID)
+		} else {
+			comment = NewComment(story.ID, sql.NullInt64{Int64: 0, Valid: false}, body, userRecord.ID)
 		}
 
 		err = s.store.InsertComment(comment)

@@ -11,6 +11,7 @@ require (
 	github.com/lib/pq v1.2.0
 	github.com/mattes/migrate v3.0.1+incompatible // indirect
 	github.com/mitchellh/mapstructure v1.1.2
+	github.com/rs/zerolog v1.19.0
 	github.com/stretchr/testify v1.4.0
 	golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
 )

@@ -88,6 +88,7 @@ func NewComment(storyID int64, parentCommentID sql.NullInt64, body string, autho
 		Body:            body,
 		AuthorID:        authorID,
 		CreatedAt:       time.Now(),
+		Upvotes:         1,
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -151,4 +152,113 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 	assert.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
 	assert.True(t, strings.Contains(string(body), "Captain Nemo"))
 	assert.True(t, strings.Contains(string(body), "href=\"http://duckduckgo.com\""))
+}
+
+func (suite *IntegrationTestSuite) TestAuthentication() {
+	t := suite.T()
+
+	cookieJar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Jar: cookieJar,
+	}
+	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
+	assert.Nil(t, err)
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
+	assert.True(t, strings.Contains(string(body), "fakeLogin"))
+}
+
+func (suite *IntegrationTestSuite) TestSubmitComment() {
+	t := suite.T()
+
+	// enable cookies on the client side for authentication
+	cookieJar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Jar: cookieJar,
+	}
+
+	// create a story to comment on
+	err := suite.pgStore.InsertStory(&tabloid.Story{
+		Title:     "Foobar",
+		URL:       "http://foobar.com",
+		Score:     1,
+		Body:      "Foobaring",
+		AuthorID:  suite.existingUserID,
+		CreatedAt: time.Now(),
+	})
+	assert.NoError(t, err)
+
+	// authenticate
+	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
+	assert.NoError(t, err)
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
+	// find the link to the story
+	storyRegexp := regexp.MustCompile(`(/stories/\d+/comments)`)
+	path := storyRegexp.FindString(string(body))
+	assert.NotEmpty(t, path, "Story path was found empty")
+	storyUrl := suite.testServer.URL + path
+
+	// get that page
+	resp, err = client.Get(storyUrl)
+	assert.NoError(t, err)
+
+	body, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
+	// submit a comment
+	values := url.Values{
+		"body":      []string{"very insightful comment"},
+		"parent-id": []string{""},
+	}
+
+	resp, err = client.PostForm(storyUrl, values)
+	assert.Nil(t, err)
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
+	assert.True(t, strings.Contains(string(body), "very insightful comment"))
+	// initial score is always 1
+	assert.True(t, strings.Contains(string(body), "Score: 1"))
+
+	// submit a subcomment
+
+	// get the form hidden input
+	// this should probably get refactored into something more automated and robust as we add more forms to the app
+	parentCommentRegexp := regexp.MustCompile(`<input type="hidden" name="parent-id" value="(\d+)">`)
+	matches := parentCommentRegexp.FindStringSubmatch(string(body))
+	assert.Len(t, matches, 2, "could not find parent comment id hidden input")
+	parentCommentID := matches[1]
+	assert.NotEmpty(t, parentCommentID, "Parent comment id was found empty")
+
+	// submit a subcomment
+	values = url.Values{
+		"body":      []string{"quite logical subcomment"},
+		"parent-id": []string{parentCommentID},
+	}
+
+	resp, err = client.PostForm(storyUrl, values)
+	assert.Nil(t, err)
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+
+	assert.True(t, strings.Contains(string(body), `quite logical subcomment`))
 }

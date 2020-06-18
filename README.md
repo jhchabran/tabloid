@@ -22,13 +22,10 @@ go run cmd/main.go
 open "http://localhost:8080"
 ```
 
-## Todo
+### Config
 
-### Features
-
-- [x] should create user when login in.
-  - [ ] extraxt email as well
-- [x] should update logged at when signing in if already exists
+- `LOG_LEVEL` sets log level; defaults to `info`
+- `LOG_FORMAT` sets log format; defaults to `json`
 
 ### Bugs
 

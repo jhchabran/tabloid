@@ -1,20 +1,23 @@
 package tabloid
 
+// TODO move template loading into an init func?
+
 import (
 	"context"
 	"database/sql"
 	"encoding/gob"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
 	"github.com/julienschmidt/httprouter"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 	"golang.org/x/oauth2"
 
 	_ "github.com/lib/pq"
@@ -24,16 +27,20 @@ const (
 	sessionKey = "tabloid-session"
 )
 
+type middleware func(http.Handler) http.Handler
+
 type Server struct {
-	Logger          *log.Logger
+	Logger          zerolog.Logger
 	addr            string
 	store           Store
 	dbString        string
+	sessionStore    *sessions.CookieStore
 	router          *httprouter.Router
+	authService     authentication.AuthService
+	middlewares     []middleware
+	rootHandler     http.Handler
 	done            chan struct{}
 	idleConnsClosed chan struct{}
-	sessionStore    *sessions.CookieStore
-	authService     authentication.AuthService
 }
 
 func init() {
@@ -41,26 +48,50 @@ func init() {
 	gob.Register(&oauth2.Token{})
 }
 
-func NewServer(addr string, store Store, authService authentication.AuthService) *Server {
-	return &Server{
+func NewServer(addr string, logger zerolog.Logger, store Store, authService authentication.AuthService) *Server {
+	middlewares := []middleware{
+		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
+			hlog.FromRequest(r).Info().
+				Str("method", r.Method).
+				Stringer("url", r.URL).
+				Int("status", status).
+				Int("size", size).
+				Dur("duration", duration).
+				Msg("")
+		}),
+		hlog.NewHandler(logger),
+	}
+
+	s := &Server{
 		addr:            addr,
 		store:           store,
 		authService:     authService,
 		router:          httprouter.New(),
-		Logger:          log.New(os.Stderr, "[Tabloid] ", log.LstdFlags),
+		Logger:          logger,
 		done:            make(chan struct{}),
 		idleConnsClosed: make(chan struct{}),
 	}
+
+	var h http.Handler = s.router
+	for _, m := range middlewares {
+		h = m(h)
+	}
+
+	s.rootHandler = h
+
+	return s
 }
 
 func (s *Server) Prepare() error {
 	// database
+	s.Logger.Debug().Msg("connecting to database")
 	err := s.store.Connect()
 	if err != nil {
 		return err
 	}
 
 	// routes
+	s.Logger.Debug().Msg("declaring routes")
 	s.router.GET("/", s.HandleIndex())
 	s.router.GET("/oauth/start", s.HandleOAuthStart())
 	s.router.GET("/oauth/authorize", s.HandleOAuthCallback())
@@ -78,9 +109,10 @@ func (s *Server) Start() error {
 	httpServer := http.Server{Addr: s.addr, Handler: s}
 
 	go func() {
+		s.Logger.Debug().Str("addr", s.addr).Msg("running server")
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			// should probably bubble this up
-			s.Logger.Fatal(err)
+			s.Logger.Fatal().Err(err)
 		}
 	}()
 
@@ -103,7 +135,7 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	s.router.ServeHTTP(res, req)
+	s.rootHandler.ServeHTTP(res, req)
 }
 
 func (s *Server) HandleOAuthStart() httprouter.Handle {
@@ -120,13 +152,13 @@ func (s *Server) HandleOAuthCallback() httprouter.Handle {
 
 		u, err := s.CurrentUser(req)
 		if err != nil {
-			s.Logger.Fatal(err)
+			s.Logger.Fatal().Err(err)
 		}
 
 		err = s.store.CreateOrUpdateUser(u.Login, "email")
 		if err != nil {
 			// TODO dirty
-			s.Logger.Fatal(err)
+			s.Logger.Fatal().Err(err)
 		}
 	}
 }
@@ -143,14 +175,14 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		"assets/templates/_footer.html",
 		"assets/templates/_story.html")
 	if err != nil {
-		s.Logger.Fatal(err)
+		s.Logger.Fatal().Err(err).Msg("Failed to load templates")
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		data, err := s.CurrentUser(req)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Could not fetch session data", http.StatusInternalServerError)
+			s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
+			http.Error(res, "Failed to fetch session data", http.StatusInternalServerError)
 			return
 		}
 
@@ -163,7 +195,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 
 		stories, err := s.store.ListStories()
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Msg("Failed to list stories")
 			http.Error(res, "Failed to list stories", http.StatusInternalServerError)
 			return
 		}
@@ -175,7 +207,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 
 		err = tmpl.Execute(res, vars)
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Msg("Failed to render template")
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)
 			return
 		}
@@ -185,7 +217,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 func (s *Server) HandleSubmit() httprouter.Handle {
 	tmpl, err := template.ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
 	if err != nil {
-		s.Logger.Fatal(err)
+		s.Logger.Fatal().Err(err).Msg("Failed to parse template")
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
@@ -193,8 +225,8 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 
 		userSession, err := s.CurrentUser(req)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Could not fetch session data", http.StatusMethodNotAllowed)
+			s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
+			http.Error(res, "Failed to fetch session data", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -210,7 +242,7 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 
 		err = tmpl.Execute(res, vars)
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Msg("Failed to render template")
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)
 			return
 		}
@@ -226,30 +258,31 @@ func (s *Server) HandleShow() httprouter.Handle {
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html")
 	if err != nil {
-		s.Logger.Fatal(err)
+		s.Logger.Fatal().Err(err).Msg("Failed to load template")
+
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		s.Logger.Println("handle show")
 		res.Header().Set("Content-Type", "text/html")
 
 		data, err := s.CurrentUser(req)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
+			http.Error(res, "Failed to fetch Github user", http.StatusMethodNotAllowed)
 			return
 		}
 
-		story, err := s.store.FindStory(params.ByName("id"))
+		id := params.ByName("id")
+		story, err := s.store.FindStory(id)
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Str("id", id).Msg("Failed to find story")
 			// TODO deal with 404
 			http.Error(res, "Failed to find story", http.StatusInternalServerError)
 		}
 
 		comments, err := s.store.ListComments(strconv.Itoa(int(story.ID)))
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Msg("Failed to list comments")
 			http.Error(res, "Failed to list comments", http.StatusInternalServerError)
 			return
 		}
@@ -263,7 +296,7 @@ func (s *Server) HandleShow() httprouter.Handle {
 		})
 
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Msg("Failed to render template")
 			http.Error(res, "Failed to render template", http.StatusInternalServerError)
 			return
 		}
@@ -276,8 +309,8 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 
 		data, err := s.CurrentUser(req)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch Github data", http.StatusMethodNotAllowed)
+			s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
+			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
 			return
 		}
 		// redirect if unathenticated
@@ -288,8 +321,8 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 
 		err = req.ParseForm()
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
+			s.Logger.Warn().Err(err).Msg("Failed to parse form")
+			http.Error(res, "Failed to parse form", http.StatusBadRequest)
 			return
 		}
 
@@ -301,15 +334,15 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		// grab author stuff
 		userSession, err := s.authService.CurrentUser(req)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch current user", http.StatusInternalServerError)
+			s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
+			http.Error(res, "Failed to fetch current user", http.StatusInternalServerError)
 			return
 		}
 
 		userRecord, err := s.store.FindUserByLogin(userSession.Login)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch user from database", http.StatusInternalServerError)
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
 			return
 		}
 
@@ -322,8 +355,8 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 
 		err = s.store.InsertStory(story)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
+			s.Logger.Error().Err(err).Msg("Failed to insert story")
+			http.Error(res, "Cannot insert story", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -334,9 +367,10 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
-		story, err := s.store.FindStory(params.ByName("id"))
+		id := params.ByName("id")
+		story, err := s.store.FindStory(id)
 		if err != nil {
-			s.Logger.Println(err)
+			s.Logger.Error().Err(err).Str("id", id).Msg("Failed to find story")
 			// TODO deal with 404
 			http.Error(res, "Failed to find story", http.StatusInternalServerError)
 			return
@@ -344,22 +378,22 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 
 		err = req.ParseForm()
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't parse form", http.StatusBadRequest)
+			s.Logger.Warn().Err(err).Msg("Failed to parse form")
+			http.Error(res, "Failed to parse form", http.StatusBadRequest)
 		}
 
 		// prepare the user
 		userSession, err := s.authService.CurrentUser(req)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch current user", http.StatusInternalServerError)
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch current user", http.StatusInternalServerError)
 			return
 		}
 
 		userRecord, err := s.store.FindUserByLogin(userSession.Login)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Couldn't fetch user from database", http.StatusInternalServerError)
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
 			return
 		}
 
@@ -371,7 +405,7 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		if _parentCommentID != "" {
 			parentCommentID, err := strconv.Atoi(_parentCommentID)
 			if err != nil {
-				s.Logger.Println(err)
+				s.Logger.Warn().Err(err).Str("parentID", _parentCommentID).Msg("Failed to parse parent id")
 				http.Error(res, "Cannot parse parent ID", http.StatusUnprocessableEntity)
 				return
 			}
@@ -382,8 +416,8 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 
 		err = s.store.InsertComment(comment)
 		if err != nil {
-			s.Logger.Println(err)
-			http.Error(res, "Cannot insert item", http.StatusMethodNotAllowed)
+			s.Logger.Error().Err(err).Msg("Failed to insert comment")
+			http.Error(res, "Failed to insert comment", http.StatusMethodNotAllowed)
 			return
 		}
 

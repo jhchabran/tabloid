@@ -16,6 +16,7 @@ import (
 	"github.com/jhchabran/tabloid"
 	"github.com/jhchabran/tabloid/authentication/fake_auth"
 	"github.com/jhchabran/tabloid/pgstore"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -30,16 +31,33 @@ type IntegrationTestSuite struct {
 	existingUserID int64
 }
 
+type testingLogWriter struct {
+	// 	Write(p []byte) (n int, err error)
+	suite *suite.Suite
+}
+
+func (l *testingLogWriter) Write(p []byte) (n int, err error) {
+	str := string(p[0 : len(p)-1]) // drop the final \n
+	l.suite.T().Log(str)
+	return len(p), nil
+}
+
 func (suite *IntegrationTestSuite) SetupTest() {
+	// cd .. for assets
 	err := os.Chdir("..")
 	if err != nil {
 		suite.FailNow("%v", err)
 	}
+
+	// prepare components
 	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
 	sessionStore := sessions.NewCookieStore([]byte("test"))
-
 	suite.fakeAuth = fake_auth.New(sessionStore)
-	suite.server = tabloid.NewServer("localhost:8081", suite.pgStore, suite.fakeAuth)
+	w := testingLogWriter{suite: &suite.Suite}
+	output := zerolog.ConsoleWriter{Out: &w, NoColor: true}
+	logger := zerolog.New(output)
+
+	suite.server = tabloid.NewServer("localhost:8081", logger, suite.pgStore, suite.fakeAuth)
 	suite.testServer = httptest.NewServer(suite.server)
 	suite.fakeAuth.SetServerURL(suite.testServer.URL)
 

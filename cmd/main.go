@@ -2,11 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
-	"fmt"
 	"io/ioutil"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/jhchabran/tabloid"
@@ -25,42 +22,25 @@ type config struct {
 func main() {
 	// setup logging
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	debug := flag.Bool("debug", false, "sets log level to debug")
-	jsonlogs := flag.Bool("jsonlogs", false, "json log format (for production)")
 
-	flag.Parse()
+	// default to info
+	rawLevel := os.Getenv("LOG_LEVEL")
+	if rawLevel == "" {
+		rawLevel = "info"
+	}
 
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	level, err := zerolog.ParseLevel(os.Getenv("LOG_LEVEL"))
+	if err != nil {
+		log.Fatal().Err(err).Str("input", os.Getenv("LOG_LEVEL")).Msg("Cannot parse LOG_LEVEL")
+	}
+	zerolog.SetGlobalLevel(level)
 
 	var logger zerolog.Logger
-	if *jsonlogs {
+	if logFormat := os.Getenv("LOG_FORMAT"); logFormat == "" || logFormat == "json" {
 		logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
 	} else {
 		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
-		output.FormatLevel = func(i interface{}) string {
-			return strings.ToUpper(fmt.Sprintf("| %-6s|", i))
-		}
-		output.FormatMessage = func(i interface{}) string {
-			return fmt.Sprintf("***%s****", i)
-		}
-		output.FormatFieldName = func(i interface{}) string {
-			return fmt.Sprintf("%s:", i)
-		}
-		output.FormatFieldValue = func(i interface{}) string {
-			return strings.ToUpper(fmt.Sprintf("%s", i))
-		}
-
 		logger = zerolog.New(output).With().Timestamp().Logger()
-	}
-
-	if *debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	}
-
-	if e := log.Debug(); e.Enabled() {
-		// Compute log output only if enabled.
-		value := "bar"
-		e.Str("foo", value).Msg("some debug message")
 	}
 
 	// setup database

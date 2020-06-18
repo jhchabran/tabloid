@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/hlog"
 	"golang.org/x/oauth2"
 
 	_ "github.com/lib/pq"
@@ -25,16 +27,20 @@ const (
 	sessionKey = "tabloid-session"
 )
 
+type middleware func(http.Handler) http.Handler
+
 type Server struct {
 	Logger          zerolog.Logger
 	addr            string
 	store           Store
 	dbString        string
+	sessionStore    *sessions.CookieStore
 	router          *httprouter.Router
+	authService     authentication.AuthService
+	middlewares     []middleware
+	rootHandler     http.Handler
 	done            chan struct{}
 	idleConnsClosed chan struct{}
-	sessionStore    *sessions.CookieStore
-	authService     authentication.AuthService
 }
 
 func init() {
@@ -43,7 +49,20 @@ func init() {
 }
 
 func NewServer(addr string, logger zerolog.Logger, store Store, authService authentication.AuthService) *Server {
-	return &Server{
+	middlewares := []middleware{
+		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
+			hlog.FromRequest(r).Info().
+				Str("method", r.Method).
+				Stringer("url", r.URL).
+				Int("status", status).
+				Int("size", size).
+				Dur("duration", duration).
+				Msg("")
+		}),
+		hlog.NewHandler(logger),
+	}
+
+	s := &Server{
 		addr:            addr,
 		store:           store,
 		authService:     authService,
@@ -52,16 +71,27 @@ func NewServer(addr string, logger zerolog.Logger, store Store, authService auth
 		done:            make(chan struct{}),
 		idleConnsClosed: make(chan struct{}),
 	}
+
+	var h http.Handler = s.router
+	for _, m := range middlewares {
+		h = m(h)
+	}
+
+	s.rootHandler = h
+
+	return s
 }
 
 func (s *Server) Prepare() error {
 	// database
+	s.Logger.Debug().Msg("connecting to database")
 	err := s.store.Connect()
 	if err != nil {
 		return err
 	}
 
 	// routes
+	s.Logger.Debug().Msg("declaring routes")
 	s.router.GET("/", s.HandleIndex())
 	s.router.GET("/oauth/start", s.HandleOAuthStart())
 	s.router.GET("/oauth/authorize", s.HandleOAuthCallback())
@@ -79,6 +109,7 @@ func (s *Server) Start() error {
 	httpServer := http.Server{Addr: s.addr, Handler: s}
 
 	go func() {
+		s.Logger.Debug().Str("addr", s.addr).Msg("running server")
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			// should probably bubble this up
 			s.Logger.Fatal().Err(err)
@@ -104,7 +135,7 @@ func (s *Server) Stop() {
 }
 
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
-	s.router.ServeHTTP(res, req)
+	s.rootHandler.ServeHTTP(res, req)
 }
 
 func (s *Server) HandleOAuthStart() httprouter.Handle {

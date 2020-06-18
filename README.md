@@ -22,10 +22,10 @@ go run cmd/main.go
 open "http://localhost:8080"
 ```
 
-### Flags
+### Config
 
-- `-debug` set log level to debug
-- `-jsonlogs` set log format to json
+- `LOG_LEVEL` sets log level; defaults to `info`
+- `LOG_FORMAT` sets log format; defaults to `json`
 
 ### Bugs
 

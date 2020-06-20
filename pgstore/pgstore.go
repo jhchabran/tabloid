@@ -8,17 +8,20 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// A PGStore is responsible of interacting with the storage layer using a Postgresql database.
 type PGStore struct {
 	dbString string
 	db       *sqlx.DB
 }
 
+// New returns a PGStore configured for a given address string, using the "user=postgres dbname=tabloid ..." format.
 func New(addr string) *PGStore {
 	return &PGStore{
 		dbString: addr,
 	}
 }
 
+// Connect establish a connection with the database using the address given at initialization.
 func (s *PGStore) Connect() error {
 	db, err := sqlx.Connect("postgres", s.dbString)
 	if err != nil {
@@ -30,13 +33,16 @@ func (s *PGStore) Connect() error {
 	return nil
 }
 
+// DB returns the existing connection, making it suitable to perform requests not already supported by
+// the store interface. If called while not connected, it will return nil.
 func (s *PGStore) DB() *sqlx.DB {
 	return s.db
 }
 
-func (s *PGStore) ListStories() ([]*tabloid.Story, error) {
+// https://www.citusdata.com/blog/2016/03/30/five-ways-to-paginate/
+func (s *PGStore) ListStories(page int, perPage int) ([]*tabloid.Story, error) {
 	stories := []*tabloid.Story{}
-	err := s.db.Select(&stories, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id ORDER BY created_at DESC")
+	err := s.db.Select(&stories, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id ORDER BY created_at DESC LIMIT $1 OFFSET $2", perPage, page*perPage)
 	if err != nil {
 		return nil, err
 	}

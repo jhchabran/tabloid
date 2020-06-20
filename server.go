@@ -178,7 +178,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		s.Logger.Fatal().Err(err).Msg("Failed to load templates")
 	}
 
-	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
@@ -193,7 +193,13 @@ func (s *Server) HandleIndex() httprouter.Handle {
 			return
 		}
 
-		stories, err := s.store.ListStories()
+		var page int
+		rawPage, ok := req.URL.Query()["page"]
+		if ok && len(rawPage) > 0 {
+			page, _ = strconv.Atoi(rawPage[0])
+		}
+
+		stories, err := s.store.ListStories(page, 3)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to list stories")
 			http.Error(res, "Failed to list stories", http.StatusInternalServerError)
@@ -201,8 +207,10 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		}
 
 		vars := map[string]interface{}{
-			"Stories": stories,
-			"Session": data,
+			"Stories":  stories,
+			"Session":  data,
+			"NextPage": page + 1,
+			"PrevPage": page - 1,
 		}
 
 		err = tmpl.Execute(res, vars)

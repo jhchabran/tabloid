@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -32,7 +33,6 @@ type IntegrationTestSuite struct {
 }
 
 type testingLogWriter struct {
-	// 	Write(p []byte) (n int, err error)
 	suite *suite.Suite
 }
 
@@ -279,4 +279,98 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 	defer resp.Body.Close()
 
 	assert.True(t, strings.Contains(string(body), `quite logical subcomment`))
+}
+
+func (suite *IntegrationTestSuite) TestPagination() {
+	t := suite.T()
+
+	// create the stories
+	for i := 0; i < 20; i++ {
+		ii := strconv.Itoa(i)
+		err := suite.pgStore.InsertStory(&tabloid.Story{
+			Title:     "Foobar" + ii,
+			URL:       "http://foobar.com/" + ii,
+			Score:     1,
+			Body:      "Foobaring",
+			AuthorID:  suite.existingUserID,
+			CreatedAt: time.Now(),
+		})
+		assert.NoError(t, err)
+	}
+
+	// get the homepage
+	resp, err := http.Get(suite.testServer.URL)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	assert.Nil(t, err)
+
+	// check that we get the latest stories
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/19"))
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/18"))
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/17"))
+	assert.False(t, strings.Contains(string(body), "http://foobar.com/3"))
+
+	// check that there is no prev link on the first page
+	paginationLink := regexp.MustCompile(`<a href="(/?page=\d+)">Prev</a>`)
+	path := paginationLink.FindString(string(body))
+	assert.Empty(t, path)
+
+	// click the next link
+	paginationLink = regexp.MustCompile(`<a href="(/\?page=\d+)">Next</a>`)
+	matches := paginationLink.FindStringSubmatch(string(body))
+	assert.Equal(t, 2, len(matches))
+	path = matches[1]
+	assert.NotEmpty(t, path, "Pagination link not found")
+	nextPage := suite.testServer.URL + path
+
+	resp, err = http.Get(nextPage)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	assert.Nil(t, err)
+
+	// check that we get the next page of stories
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/16"))
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/15"))
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/14"))
+	assert.False(t, strings.Contains(string(body), "http://foobar.com/19"))
+
+	// click the prev link
+	paginationLink = regexp.MustCompile(`<a href="(/\?page=\d+)">Prev</a>`)
+	matches = paginationLink.FindStringSubmatch(string(body))
+	assert.Equal(t, 2, len(matches))
+	path = matches[1]
+	assert.NotEmpty(t, path, "Pagination link not found")
+	nextPage = suite.testServer.URL + path
+
+	resp, err = http.Get(nextPage)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+
+	if resp != nil {
+		assert.Equal(t, 200, resp.StatusCode)
+	}
+
+	body, err = ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	assert.Nil(t, err)
+
+	// check that we are back on the homepage
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/19"))
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/18"))
+	assert.True(t, strings.Contains(string(body), "http://foobar.com/17"))
+	assert.False(t, strings.Contains(string(body), "http://foobar.com/16"))
 }

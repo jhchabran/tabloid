@@ -49,6 +49,12 @@ func (suite *IntegrationTestSuite) SetupTest() {
 		suite.FailNow("%v", err)
 	}
 
+	// prepare test config
+	config := &tabloid.ServerConfig{
+		Addr:           "localhost:8081",
+		StoriesPerPage: 3,
+	}
+
 	// prepare components
 	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
 	sessionStore := sessions.NewCookieStore([]byte("test"))
@@ -57,7 +63,7 @@ func (suite *IntegrationTestSuite) SetupTest() {
 	output := zerolog.ConsoleWriter{Out: &w, NoColor: true}
 	logger := zerolog.New(output)
 
-	suite.server = tabloid.NewServer("localhost:8081", logger, suite.pgStore, suite.fakeAuth)
+	suite.server = tabloid.NewServer(config, logger, suite.pgStore, suite.fakeAuth)
 	suite.testServer = httptest.NewServer(suite.server)
 	suite.fakeAuth.SetServerURL(suite.testServer.URL)
 

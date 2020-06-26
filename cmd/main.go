@@ -13,12 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type config struct {
-	ClientSecret string `json:"clientSecret"`
-	ClientID     string `json:"clientID"`
-	ServerSecret string `json:"serverSecret"`
-}
-
 func main() {
 	// setup logging
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -45,6 +39,8 @@ func main() {
 
 	// setup database
 	pg := pgstore.New("user=postgres dbname=tabloid sslmode=disable password=postgres host=127.0.0.1")
+
+	// load configuration
 	config, err := loadConfig()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -54,7 +50,7 @@ func main() {
 	authService := github_auth.New(config.ServerSecret, config.ClientID, config.ClientSecret)
 
 	// fire the server
-	s := tabloid.NewServer(":8080", logger, pg, authService)
+	s := tabloid.NewServer(config, logger, pg, authService)
 	err = s.Prepare()
 	if err != nil {
 		log.Fatal().Err(err)
@@ -66,8 +62,8 @@ func main() {
 	}
 }
 
-func loadConfig() (*config, error) {
-	config := &config{}
+func loadConfig() (*tabloid.ServerConfig, error) {
+	config := &tabloid.ServerConfig{}
 	b, err := ioutil.ReadFile("config.json")
 	if err != nil {
 		return nil, err

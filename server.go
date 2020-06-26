@@ -31,7 +31,7 @@ type middleware func(http.Handler) http.Handler
 
 type Server struct {
 	Logger          zerolog.Logger
-	addr            string
+	config          *ServerConfig
 	store           Store
 	dbString        string
 	sessionStore    *sessions.CookieStore
@@ -43,12 +43,20 @@ type Server struct {
 	idleConnsClosed chan struct{}
 }
 
+type ServerConfig struct {
+	Addr           string `json:"addr"`
+	ClientSecret   string `json:"clientSecret"`
+	ClientID       string `json:"clientID"`
+	ServerSecret   string `json:"serverSecret"`
+	StoriesPerPage int    `json:"storiesPerPage"`
+}
+
 func init() {
 	// be able to serialize session data in a cookie
 	gob.Register(&oauth2.Token{})
 }
 
-func NewServer(addr string, logger zerolog.Logger, store Store, authService authentication.AuthService) *Server {
+func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authService authentication.AuthService) *Server {
 	middlewares := []middleware{
 		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
 			hlog.FromRequest(r).Info().
@@ -63,7 +71,7 @@ func NewServer(addr string, logger zerolog.Logger, store Store, authService auth
 	}
 
 	s := &Server{
-		addr:            addr,
+		config:          config,
 		store:           store,
 		authService:     authService,
 		router:          httprouter.New(),
@@ -106,10 +114,10 @@ func (s *Server) Prepare() error {
 }
 
 func (s *Server) Start() error {
-	httpServer := http.Server{Addr: s.addr, Handler: s}
+	httpServer := http.Server{Addr: s.config.Addr, Handler: s}
 
 	go func() {
-		s.Logger.Debug().Str("addr", s.addr).Msg("running server")
+		s.Logger.Debug().Str("addr", s.config.Addr).Msg("running server")
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			// should probably bubble this up
 			s.Logger.Fatal().Err(err)
@@ -178,7 +186,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		s.Logger.Fatal().Err(err).Msg("Failed to load templates")
 	}
 
-	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		data, err := s.CurrentUser(req)
 		if err != nil {
 			s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
@@ -193,7 +201,13 @@ func (s *Server) HandleIndex() httprouter.Handle {
 			return
 		}
 
-		stories, err := s.store.ListStories()
+		var page int
+		rawPage, ok := req.URL.Query()["page"]
+		if ok && len(rawPage) > 0 {
+			page, _ = strconv.Atoi(rawPage[0])
+		}
+
+		stories, err := s.store.ListStories(page, s.config.StoriesPerPage)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to list stories")
 			http.Error(res, "Failed to list stories", http.StatusInternalServerError)
@@ -201,8 +215,10 @@ func (s *Server) HandleIndex() httprouter.Handle {
 		}
 
 		vars := map[string]interface{}{
-			"Stories": stories,
-			"Session": data,
+			"Stories":  stories,
+			"Session":  data,
+			"NextPage": page + 1,
+			"PrevPage": page - 1,
 		}
 
 		err = tmpl.Execute(res, vars)

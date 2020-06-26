@@ -1,5 +1,7 @@
 {
 	"clientID":"",
 	"clientSecret":"",
-	"serverSecret":""
+	"serverSecret":"",
+	"storiesPerPage":20,
+	"addr":"localhost:8080"
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
+	"golang.org/x/oauth2"
 )
 
 const sessionKey = "fake_auth_key"
@@ -30,14 +31,11 @@ func (h *Handler) SetServerURL(url string) {
 	h.serverUrl = url
 }
 
-func (h *Handler) LoadUserData(req *http.Request, res http.ResponseWriter) (*authentication.User, error) {
+func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res http.ResponseWriter) (*authentication.User, error) {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
 		return nil, err
 	} // TODO do I need this?
-
-	session.Values["githubUserName"] = "fakeLogin" + strconv.Itoa(h.counter)
-	session.Values["githubAccessToken"] = "test-token"
 
 	userSession := &authentication.User{
 		Login:     "fakeLogin" + strconv.Itoa(h.counter),
@@ -53,7 +51,7 @@ func (h *Handler) LoadUserData(req *http.Request, res http.ResponseWriter) (*aut
 		return nil, err
 	}
 
-	return nil, nil
+	return userSession, nil
 }
 
 func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
@@ -94,10 +92,16 @@ func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, h.serverUrl+"/oauth/authorize", 302)
 }
 
-func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
-	_, err := h.LoadUserData(req, res)
+func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*authentication.User) error) {
+	u, err := h.LoadUserData(nil, req, res)
 	if err != nil {
 		http.Error(res, "couldn't load user data from fake auth", 500)
+		return
+	}
+
+	err = beforeWriteCallback(u)
+	if err != nil {
+		http.Error(res, "failed to execute oauth callback", 500)
 		return
 	}
 

@@ -19,8 +19,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"golang.org/x/oauth2"
-
-	_ "github.com/lib/pq"
 )
 
 const (
@@ -156,18 +154,9 @@ func (s *Server) HandleOAuthCallback() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		// need to think about error handling here
 		// probably a before write callback is good enough?
-		s.authService.Callback(res, req)
-
-		u, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Fatal().Err(err)
-		}
-
-		err = s.store.CreateOrUpdateUser(u.Login, "email")
-		if err != nil {
-			// TODO dirty
-			s.Logger.Fatal().Err(err)
-		}
+		s.authService.Callback(res, req, func(u *authentication.User) error {
+			return s.store.CreateOrUpdateUser(u.Login, "email")
+		})
 	}
 }
 

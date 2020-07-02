@@ -5,14 +5,13 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
 	"github.com/mitchellh/mapstructure"
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
 
@@ -20,17 +19,18 @@ const (
 	sessionKey = "tabloid-session"
 )
 
+// TODO wrap in a config struct?
 type Handler struct {
 	// useless atm, but keeping around to dig around whatever I could need
 	// at this stage.
 	sessionStore *sessions.CookieStore
 	clientID     string
 	clientSecret string
-	logger       *log.Logger
+	logger       zerolog.Logger
 	oauthConfig  *oauth2.Config
 }
 
-func New(serverSecret string, clientID string, clientSecret string) *Handler {
+func New(serverSecret string, clientID string, clientSecret string, logger zerolog.Logger) *Handler {
 	sessionStore := sessions.NewCookieStore([]byte(serverSecret))
 	oauthConfig := &oauth2.Config{
 		ClientID:     clientID,
@@ -45,21 +45,17 @@ func New(serverSecret string, clientID string, clientSecret string) *Handler {
 	return &Handler{
 		sessionStore: sessionStore,
 		oauthConfig:  oauthConfig,
+		logger:       logger,
 	}
 }
 
 // TODO comment that properly
 // side effect: load into session
 // returns what was stored in the session
-func (h *Handler) LoadUserData(req *http.Request, res http.ResponseWriter) (*authentication.User, error) {
+func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res http.ResponseWriter) (*authentication.User, error) {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
 		return nil, err
-	}
-
-	accessToken, ok := session.Values["githubAccessToken"].(*oauth2.Token)
-	if !ok {
-		return nil, fmt.Errorf("inconsistent state")
 	}
 
 	userData := map[string]interface{}{}
@@ -73,6 +69,7 @@ func (h *Handler) LoadUserData(req *http.Request, res http.ResponseWriter) (*aut
 	userSession := &authentication.User{
 		Login:     *user.Login,
 		AvatarURL: *user.AvatarURL,
+		// No reason to store the token for now
 	}
 
 	userData["User"] = user
@@ -129,7 +126,7 @@ func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 	http.Redirect(res, req, url, 302)
 }
 
-func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
+func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*authentication.User) error) {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
 		http.Error(res, "Session aborted", http.StatusInternalServerError)
@@ -152,36 +149,28 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, token))
-
-	// user, _, err := client.Users.Get(context.Background(), "")
+	u, err := h.LoadUserData(token, req, res)
 	if err != nil {
-		http.Error(res, "error getting name", http.StatusInternalServerError)
+		h.logger.Error().Err(err).Msg("failed to load user data from Github")
+		http.Error(res, "failed to load user data from Github", 500)
 		return
 	}
 
-	// TODO it seems I don't need this at all.
-	// session.Values["githubUserName"] = user.Name
-	// session.Values["githubAccessToken"] = token
-	// err = session.Save(req, res)
+	err = beforeWriteCallback(u)
 	if err != nil {
-		h.logger.Println(err)
-		http.Error(res, "could not save session", http.StatusInternalServerError)
+		h.logger.Error().Err(err).Msg("failed to execute oauth callback")
+		http.Error(res, "failed to execute oauth callback", 500)
 		return
 	}
 
-	_, err = h.LoadUserData(req, res)
-	if err != nil {
-		http.Error(res, "couldn't load user data from Github", 500)
-		return
-	}
 	http.Redirect(res, req, "/", 302)
 }
 
 func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
-		http.Error(res, "aborted", http.StatusInternalServerError)
+		h.logger.Error().Err(err).Msg("failed to destroy session")
+		http.Error(res, "failed to destroy session", http.StatusInternalServerError)
 		return
 	}
 

@@ -47,7 +47,8 @@ func main() {
 	}
 
 	// setup authentication
-	authService := github_auth.New(config.ServerSecret, config.ClientID, config.ClientSecret)
+	ll := logger.With().Str("component", "github auth").Logger()
+	authService := github_auth.New(config.ServerSecret, config.ClientID, config.ClientSecret, ll)
 
 	// fire the server
 	s := tabloid.NewServer(config, logger, pg, authService)

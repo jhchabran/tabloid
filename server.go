@@ -25,6 +25,19 @@ const (
 	sessionKey = "tabloid-session"
 )
 
+var helpers template.FuncMap = template.FuncMap{
+	"daysAgo": func(t time.Time) string {
+		now := time.Now()
+		days := int(now.Sub(t).Hours() / 24)
+
+		if days < 1 {
+			return "today"
+		}
+		return strconv.Itoa(days) + " days ago"
+	},
+	"title": strings.Title,
+}
+
 type middleware func(http.Handler) http.Handler
 
 type Server struct {
@@ -167,7 +180,7 @@ func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 }
 
 func (s *Server) HandleIndex() httprouter.Handle {
-	tmpl, err := template.ParseFiles("assets/templates/index.html",
+	tmpl, err := template.New("index.html").Funcs(helpers).ParseFiles("assets/templates/index.html",
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html",
 		"assets/templates/_story.html")
@@ -220,7 +233,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 }
 
 func (s *Server) HandleSubmit() httprouter.Handle {
-	tmpl, err := template.ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
+	tmpl, err := template.New("submit.html").Funcs(helpers).ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal().Err(err).Msg("Failed to parse template")
 	}
@@ -255,16 +268,15 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 }
 
 func (s *Server) HandleShow() httprouter.Handle {
-	tmpl, err := template.ParseFiles(
+	tmpl, err := template.New("show.html").Funcs(helpers).ParseFiles(
 		"assets/templates/show.html",
-		"assets/templates/_story.html",
+		"assets/templates/_story_comments.html",
 		"assets/templates/_comment.html",
 		"assets/templates/_comment_form.html",
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal().Err(err).Msg("Failed to load template")
-
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {

@@ -1,35 +1,3 @@
-.content {
-    padding: 2em 1em 0;
-}
-
-#menu {
-	background: #F28C0F;
-	color: #FFFFFF;
-	padding: 5px;
-}
-
-form#submit-form {
-	display: table;
-}
-
-div#submit-field {
-	display: table-row;
-}
-
-label, input {
-    display: table-cell;
-    margin-bottom: 10px;
-}
-
-label {
-    padding-right: 10px;
-}
-
-li.parent-tree-line {
-	border-left: 1px dotted #bbb;
-	padding-left: 10px;
-}
-
 .trigger + label + div /*This selects the div that is placed after a label that's after a element with 'trigger' class*/
 {
 	display:none; /*hiding the element*/
@@ -47,5 +15,25 @@ li.parent-tree-line {
 
 .avatar {
 	height: 2em;
-	width: 2em;
+}
+
+.story-meta {
+  font-size: 0.7em
+}
+
+.story-meta a {
+  text-decoration: none;
+}
+
+.story-meta a:hover {
+  text-decoration: underline;
+}
+
+ul.comments-tree {
+  list-style: none;
+  padding-left: 0;
+}
+
+ul.comments-tree li {
+  list-style: none;
 }

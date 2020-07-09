@@ -1,0 +1,11 @@
+{{define "story_comments"}}
+<span class="text-secondary">1.</span>
+<a href="{{.URL}}">{{.Title | title }}</a>
+<br/>
+<span class="story-meta text-secondary pl-2">
+  {{.Score}} by {{.Author}} {{.CreatedAt | daysAgo}}
+</span>
+<div class="pl-2 text-secondary">
+  <p>{{.Body}}</p>
+</div>
+{{end}}

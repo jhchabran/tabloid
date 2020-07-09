@@ -2,46 +2,66 @@
 <!doctype html>
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8">
+  <head>
+    <meta charset="utf-8">
 
-		<title>Tabloid</title>
-		<meta name="description" content="Tabloid description">
-		<meta name="author" content="Tabloid">
+    <title>Tabloid</title>
+    <meta name="description" content="Tabloid description">
+    <meta name="author" content="Tabloid">
 
-		<link rel="stylesheet" href="https://unpkg.com/purecss@1.0.1/build/pure-min.css" integrity="sha384-oAOxQR6DkCoMliIh8yFnu25d7Eq/PHS21PClpwjOTeU2jRSq11vu66rf90/cZr47" crossorigin="anonymous">
-		<link rel="stylesheet" href="/static/style.css">
-		<meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/5.0.0-alpha1/css/bootstrap.min.css" integrity="sha384-r4NyP46KrjDleawBgD5tp8Y7UzmLA05oM1iAEQ17CSuDqnUK2+k9luXQOfXJCJ4I" crossorigin="anonymous">
+    <link rel="stylesheet" href="/static/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+  </head>
 
-	</head>
-
-	<body>
-		<div class="pure-g">
-			<div class="pure-u-4-5 content">
-				<div id="menu">
-					<p><a href="/"><b>Tabloid</b></a>
-					new
-					|
-					past
-					|
-					comments
-					|
-					ask
-					|
-					show
-					|
-					{{if .Session}}
-					<a href="/submit">submit</a>
-					|
-					<img class="avatar" src="{{ .Session.AvatarURL }}" alt="...">
-					<a href="/account">{{.Session.Login}}</a>
-					|
-					<a href="/oauth/destroy">Logout</a>
-					{{else}}
-					<a href="/oauth/start">Login</a>
-					{{end}}
-					</p>
-				</div>
+  <body>
+    <div class="container">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+          <a class="navbar-brand" href="/">Tabloid</a>
+          <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <span class="navbar-toggler-icon"></span>
+          </button>
+          <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav mr-auto mb-2 mb-lg-0">
+              <li class="nav-item">
+                <a class="nav-link disabled" aria-current="page" aria-disabled="true" href="#">New</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link disabled" aria-current="page" aria-disabled="true" href="#">Past</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link disabled" aria-current="page" aria-disabled="true" href="#">Comments</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link disabled" aria-current="page" aria-disabled="true" href="#">Ask</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link disabled" aria-current="page" aria-disabled="true" href="#">Show</a>
+              </li>
+              {{if .Session}}
+              <li class="nav-item">
+                <a class="nav-link" aria-current="page" href="/submit">Submit</a>
+              </li>
+            </ul>
+            <ul class="navbar-nav mb-2 mb-lg-0">
+              <li class="nav-item">
+                <a class="nav-link disabled text-warning" aria-current="page" aria-disabled="true" href="#">
+                  {{ .Session.Login }}
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link" aria-current="page" href="/oauth/destroy">Logout</a>
+              </li>
+              {{else}}
+              <li class="nav-item">
+                <a class="nav-link" aria-current="page" href="/oauth/start">Login</a>
+              </li>
+              {{end}}
+            </ul>
+          </div>
+        </div>
+      </nav>
+      <!-- Yes this probably isnt' the way to do it. -->
+      <div class="container">
 {{end}}
-
-

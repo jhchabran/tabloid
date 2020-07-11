@@ -179,6 +179,34 @@ func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 	}
 }
 
+type storyPresenter struct {
+	Pos           int
+	ID            int64
+	Title         string
+	URL           string
+	Body          string
+	Score         int64
+	Author        string
+	AuthorID      int64
+	CommentsCount int64
+	CreatedAt     time.Time
+}
+
+func newStoryPresenter(story *Story, pos int) *storyPresenter {
+	return &storyPresenter{
+		Pos:           pos,
+		ID:            story.ID,
+		Title:         story.Title,
+		URL:           story.URL,
+		Body:          story.Body,
+		Score:         story.Score,
+		Author:        story.Author,
+		AuthorID:      story.AuthorID,
+		CommentsCount: story.CommentsCount,
+		CreatedAt:     story.CreatedAt,
+	}
+}
+
 func (s *Server) HandleIndex() httprouter.Handle {
 	tmpl, err := template.New("index.html").Funcs(helpers).ParseFiles("assets/templates/index.html",
 		"assets/templates/_header.html",
@@ -216,8 +244,14 @@ func (s *Server) HandleIndex() httprouter.Handle {
 			return
 		}
 
+		storyPresenters := []*storyPresenter{}
+		for i, st := range stories {
+			pos := 1 + i + (page * s.config.StoriesPerPage)
+			storyPresenters = append(storyPresenters, newStoryPresenter(st, pos))
+		}
+
 		vars := map[string]interface{}{
-			"Stories":  stories,
+			"Stories":  storyPresenters,
 			"Session":  data,
 			"NextPage": page + 1,
 			"PrevPage": page - 1,

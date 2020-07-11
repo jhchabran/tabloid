@@ -105,11 +105,12 @@ func NewCommentPresenter(c *CommentNode) *CommentPresenter {
 	}
 
 	return &CommentPresenter{
-		ID:       c.Comment.ID,
-		StoryID:  c.Comment.StoryID,
-		Body:     c.Comment.Body,
-		Score:    c.Comment.Score(),
-		Author:   c.Comment.Author,
-		Children: children,
+		ID:        c.Comment.ID,
+		StoryID:   c.Comment.StoryID,
+		Body:      c.Comment.Body,
+		Score:     c.Comment.Score(),
+		Author:    c.Comment.Author,
+		CreatedAt: c.Comment.CreatedAt,
+		Children:  children,
 	}
 }

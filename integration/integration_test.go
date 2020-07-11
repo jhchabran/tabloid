@@ -257,7 +257,7 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 
 	assert.True(t, strings.Contains(string(body), "very insightful comment"))
 	// initial score is always 1
-	assert.True(t, strings.Contains(string(body), "Score: 1"))
+	assert.True(t, strings.Contains(string(body), "1 by alpha, today"))
 
 	// submit a subcomment
 

@@ -1,16 +1,18 @@
 {{define "comment"}}
-<li class="parent-tree-line">
-	Score: {{.Score}} Author {{.Author}}
-	<p>{{.Body}}</p>
+<li class="">
+	<span class="story-meta text-secondary">
+		{{.Author}}, {{.CreatedAt | daysAgo}}
+	</span>
+	<p class="mb-0" >{{.Body}}</p>
 	<input class="trigger" id="{{.ID}}" type="checkbox">
-	<label for="{{.ID}}">Toggle Reply</label>
+	<label class="story-meta text-secondary" for="{{.ID}}">Reply</label>
 	<div class="">
 		{{template "comment_form" .}}
 	</div>
 
 	<ul class="comments">
 		{{range .Children}}
-			{{template "comment" .}}
+		{{template "comment" .}}
 		{{end}}
 	</ul>
 </li>

@@ -25,6 +25,19 @@ const (
 	sessionKey = "tabloid-session"
 )
 
+var helpers template.FuncMap = template.FuncMap{
+	"daysAgo": func(t time.Time) string {
+		now := time.Now()
+		days := int(now.Sub(t).Hours() / 24)
+
+		if days < 1 {
+			return "today"
+		}
+		return strconv.Itoa(days) + " days ago"
+	},
+	"title": strings.Title,
+}
+
 type middleware func(http.Handler) http.Handler
 
 type Server struct {
@@ -166,8 +179,36 @@ func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 	}
 }
 
+type storyPresenter struct {
+	Pos           int
+	ID            int64
+	Title         string
+	URL           string
+	Body          string
+	Score         int64
+	Author        string
+	AuthorID      int64
+	CommentsCount int64
+	CreatedAt     time.Time
+}
+
+func newStoryPresenter(story *Story, pos int) *storyPresenter {
+	return &storyPresenter{
+		Pos:           pos,
+		ID:            story.ID,
+		Title:         story.Title,
+		URL:           story.URL,
+		Body:          story.Body,
+		Score:         story.Score,
+		Author:        story.Author,
+		AuthorID:      story.AuthorID,
+		CommentsCount: story.CommentsCount,
+		CreatedAt:     story.CreatedAt,
+	}
+}
+
 func (s *Server) HandleIndex() httprouter.Handle {
-	tmpl, err := template.ParseFiles("assets/templates/index.html",
+	tmpl, err := template.New("index.html").Funcs(helpers).ParseFiles("assets/templates/index.html",
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html",
 		"assets/templates/_story.html")
@@ -203,8 +244,14 @@ func (s *Server) HandleIndex() httprouter.Handle {
 			return
 		}
 
+		storyPresenters := []*storyPresenter{}
+		for i, st := range stories {
+			pos := 1 + i + (page * s.config.StoriesPerPage)
+			storyPresenters = append(storyPresenters, newStoryPresenter(st, pos))
+		}
+
 		vars := map[string]interface{}{
-			"Stories":  stories,
+			"Stories":  storyPresenters,
 			"Session":  data,
 			"NextPage": page + 1,
 			"PrevPage": page - 1,
@@ -220,7 +267,7 @@ func (s *Server) HandleIndex() httprouter.Handle {
 }
 
 func (s *Server) HandleSubmit() httprouter.Handle {
-	tmpl, err := template.ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
+	tmpl, err := template.New("submit.html").Funcs(helpers).ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal().Err(err).Msg("Failed to parse template")
 	}
@@ -255,16 +302,15 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 }
 
 func (s *Server) HandleShow() httprouter.Handle {
-	tmpl, err := template.ParseFiles(
+	tmpl, err := template.New("show.html").Funcs(helpers).ParseFiles(
 		"assets/templates/show.html",
-		"assets/templates/_story.html",
+		"assets/templates/_story_comments.html",
 		"assets/templates/_comment.html",
 		"assets/templates/_comment_form.html",
 		"assets/templates/_header.html",
 		"assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal().Err(err).Msg("Failed to load template")
-
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {

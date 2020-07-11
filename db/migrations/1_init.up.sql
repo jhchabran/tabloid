@@ -5,5 +5,6 @@ CREATE TABLE stories (
 	body text,
 	score integer,
 	author_id integer NOT NULL,
+	comments_count int DEFAULT 0,
 	created_at timestamp NOT NULL
 );

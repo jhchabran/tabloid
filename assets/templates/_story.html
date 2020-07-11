@@ -1,11 +1,15 @@
 {{define "story"}}
-<li class="story">
-	<a href="{{.URL}}">{{.Title}}</a>
-	<br/>
-	<small>
-		{{.Score}} by {{.Author}} at {{.CreatedAt}}
-		<a href="/stories/{{.ID}}/comments">Comments</a>
-	</small>
-	<p>{{.Body}}</p>
+<li class="list-group-item">
+  <span class="text-secondary">{{.Pos}}</span>
+  <a href="{{.URL}}">{{.Title | title}}</a>
+  <br/>
+
+
+  <!-- <br/> -->
+  <span class="story-meta text-secondary pl-2">
+  	{{.Score}} by {{.Author}}, {{.CreatedAt | daysAgo}} |
+    <a class="link-secondary" href="/stories/{{.ID}}/comments">{{.CommentsCount}} Comments</a>
+  </span>
+  <!-- <p>{{.Body}}</p> -->
 </li>
 {{end}}

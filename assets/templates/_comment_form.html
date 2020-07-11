@@ -2,14 +2,12 @@
 <div id="post-comment">
 	<form action="/stories/{{.StoryID}}/comments" method="post" id="submit-form" autocomplete="off">
 		<input type="hidden" name="parent-id" value="{{.ID}}">
-		<div class="submit-field">
-			<label for="body">Body: </label>
-			<textarea name="body" id="body" rows="4" required>
-			</textarea>
+		<div class="col-6 mb-3">
+			<textarea class="form-control" name="body" id="body" rows="4" required></textarea>
 		</div>
 
-		<div class="submit-field">
-			<input type="submit" value="Submit">
+		<div class="col-12">
+			<input class="btn btn-primary" type="submit" value="Submit">
 		</div>
 	</form>
 </div>

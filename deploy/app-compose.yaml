@@ -1,0 +1,38 @@
+# goes along https://github.com/evertramos/docker-compose-letsencrypt-nginx-proxy-companion/blob/master/docker-compose.yml
+version: "3"
+services:
+    database:
+        container_name: tabloid-postgres
+        image: circleci/postgres:11-alpine
+        restart: always
+        ports:
+            - "5432:5432"
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: tabloid
+    app:
+        image: jhchabran/tabloid:latest
+        container_name: tabloid-app
+        restart: always
+        depends_on:
+          - database
+        environment:
+          LOG_LEVEL: info
+          LOG_FORMAT: json
+          DATABASE_HOST: tabloid-postgres
+          DATABASE_USER: postgres
+          DATABASE_PASSWORD: postgres
+          DATABASE_NAME: tabloid
+          ADDR: "0.0.0.0:80"
+          GITHUB_CLIENT_ID: ""
+          GITHUB_CLIENT_SECRET: ""
+          SERVER_SECRET: ""
+          VIRTUAL_HOST: "vhost"
+          LETSENCRYPT_HOST: "vhost"
+          LETSENCRYPT_EMAIL: ""
+
+networks:
+  default:
+    external:
+      name: ${NETWORK:-webproxy}

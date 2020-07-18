@@ -1,3 +1,4 @@
+# this is intended for development use
 version: "3"
 services:
     database:

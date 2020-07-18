@@ -55,11 +55,8 @@ type Server struct {
 }
 
 type ServerConfig struct {
-	Addr           string `json:"addr"`
-	ClientSecret   string `json:"clientSecret"`
-	ClientID       string `json:"clientID"`
-	ServerSecret   string `json:"serverSecret"`
-	StoriesPerPage int    `json:"storiesPerPage"`
+	Addr           string
+	StoriesPerPage int
 }
 
 func init() {

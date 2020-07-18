@@ -1,7 +1,9 @@
 {
-	"clientID":"",
-	"clientSecret":"",
-	"serverSecret":"",
-	"storiesPerPage":20,
-	"addr":"localhost:8080"
+	"github_client_id":"",
+	"github_client_secret":"",
+	"server_secret":"",
+	"stories_per_page":20,
+	"addr":"localhost:8080",
+	"log_level":"info",
+	"log_format":"console"
 }

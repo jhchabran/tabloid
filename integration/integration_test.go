@@ -227,6 +227,9 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
+	// assert that comment count is set to zero and correctly pluralized on the homepage
+	assert.True(t, strings.Contains(string(body), "0 Comments"))
+
 	// find the link to the story
 	storyRegexp := regexp.MustCompile(`(/stories/\d+/comments)`)
 	path := storyRegexp.FindString(string(body))
@@ -256,17 +259,24 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 	defer resp.Body.Close()
 
 	assert.True(t, strings.Contains(string(body), "very insightful comment"))
+
 	// initial score is always 1
 	assert.True(t, strings.Contains(string(body), "1 by alpha, today"))
 
-	// submit a subcomment
+	// ensure that comments get pluralized properly on the homepage
+	resp2, err := client.Get(suite.testServer.URL)
+	body2, err := ioutil.ReadAll(resp2.Body)
+	defer resp2.Body.Close()
+	assert.Nil(t, err)
+	assert.True(t, strings.Contains(string(body2), "1 Comment"))
 
+	// submit a subcomment
 	// get the form hidden input
 	// this should probably get refactored into something more automated and robust as we add more forms to the app
 	parentCommentRegexp := regexp.MustCompile(`<input type="hidden" name="parent-id" value="(\d+)">`)
-	matches := parentCommentRegexp.FindStringSubmatch(string(body))
-	assert.Len(t, matches, 2, "could not find parent comment id hidden input")
-	parentCommentID := matches[1]
+	matches := parentCommentRegexp.FindAllStringSubmatch(string(body), -1)
+	assert.Len(t, matches, 1, "could not find parent comment id hidden input")
+	parentCommentID := matches[0][1]
 	assert.NotEmpty(t, parentCommentID, "Parent comment id was found empty")
 
 	// submit a subcomment
@@ -284,7 +294,15 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
+	// ensure that the comment body is present
 	assert.True(t, strings.Contains(string(body), `quite logical subcomment`))
+
+	// ensure that comments get pluralized properly
+	resp2, err = client.Get(suite.testServer.URL + "/")
+	body2, err = ioutil.ReadAll(resp2.Body)
+	defer resp2.Body.Close()
+	assert.Nil(t, err)
+	assert.True(t, strings.Contains(string(body2), "2 Comments"))
 }
 
 func (suite *IntegrationTestSuite) TestPagination() {

@@ -394,12 +394,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		story := &Story{
-			AuthorID: userRecord.ID,
-			Title:    title,
-			Body:     body,
-			URL:      url,
-		}
+		story := NewStory(title, body, userRecord.ID, url)
 
 		err = s.store.InsertStory(story)
 		if err != nil {

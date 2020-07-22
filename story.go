@@ -14,12 +14,13 @@ type Story struct {
 	CreatedAt     time.Time `db:"created_at"`
 }
 
-func NewStory(title string, body string, authorID int64) *Story {
+func NewStory(title string, body string, authorID int64, url string) *Story {
 	return &Story{
 		Title:     title,
 		Body:      body,
 		Score:     1,
 		AuthorID:  authorID,
+		URL:       url,
 		CreatedAt: time.Now(),
 	}
 }

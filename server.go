@@ -25,6 +25,8 @@ const (
 	sessionKey = "tabloid-session"
 )
 
+var NowFunc func() time.Time = time.Now
+
 var helpers template.FuncMap = template.FuncMap{
 	"daysAgo": func(t time.Time) string {
 		now := time.Now()
@@ -117,6 +119,8 @@ func (s *Server) Prepare() error {
 	s.router.POST("/submit", s.HandleSubmitAction())
 	s.router.GET("/stories/:id/comments", s.HandleShow())
 	s.router.POST("/stories/:id/comments", s.HandleSubmitCommentAction())
+	// s.router.POST("/stories/:story_id/comments/:id/votes", s.HandleVoteCommentAction())
+	s.router.POST("/stories/:id/votes", s.HandleVoteStoryAction())
 
 	return nil
 }
@@ -176,6 +180,10 @@ func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 	}
 }
 
+func (s *Server) CurrentUser(req *http.Request) (*authentication.User, error) {
+	return s.authService.CurrentUser(req)
+}
+
 type storyPresenter struct {
 	Pos           int
 	ID            int64
@@ -187,6 +195,7 @@ type storyPresenter struct {
 	AuthorID      int64
 	CommentsCount int64
 	CreatedAt     time.Time
+	Upvoted       bool
 }
 
 func newStoryPresenter(story *Story, pos int) *storyPresenter {
@@ -221,50 +230,128 @@ func (s *Server) HandleIndex() httprouter.Handle {
 			return
 		}
 
-		res.Header().Set("Content-Type", "text/html")
-
-		if req.Method != "GET" {
-			http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
+		if data != nil {
+			s.Logger.Debug().Msg("Authenticated")
+			s.handleAuthenticatedIndex(res, req, params, tmpl)
 			return
-		}
-
-		var page int
-		rawPage, ok := req.URL.Query()["page"]
-		if ok && len(rawPage) > 0 {
-			page, _ = strconv.Atoi(rawPage[0])
-		}
-
-		stories, err := s.store.ListStories(page, s.config.StoriesPerPage)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to list stories")
-			http.Error(res, "Failed to list stories", http.StatusInternalServerError)
-			return
-		}
-
-		storyPresenters := []*storyPresenter{}
-		for i, st := range stories {
-			pos := 1 + i + (page * s.config.StoriesPerPage)
-			storyPresenters = append(storyPresenters, newStoryPresenter(st, pos))
-		}
-
-		vars := map[string]interface{}{
-			"Stories":  storyPresenters,
-			"Session":  data,
-			"NextPage": page + 1,
-			"PrevPage": page - 1,
-		}
-
-		err = tmpl.Execute(res, vars)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to render template")
-			http.Error(res, "Failed to render template", http.StatusInternalServerError)
+		} else {
+			s.Logger.Debug().Msg("Unauthenticated")
+			s.handleUnauthenticatedIndex(res, req, params, tmpl)
 			return
 		}
 	}
 }
 
+func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
+	data, err := s.CurrentUser(req)
+	if err != nil {
+		s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
+		http.Error(res, "Failed to fetch session data", http.StatusInternalServerError)
+		return
+	}
+
+	userRecord, err := s.store.FindUserByLogin(data.Login)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+		http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
+		return
+	}
+
+	res.Header().Set("Content-Type", "text/html")
+
+	if req.Method != "GET" {
+		http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var page int
+	rawPage, ok := req.URL.Query()["page"]
+	if ok && len(rawPage) > 0 {
+		page, _ = strconv.Atoi(rawPage[0])
+	}
+
+	stories, err := s.store.ListStoriesWithVotes(userRecord.ID, page, s.config.StoriesPerPage)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to list stories")
+		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
+		return
+	}
+
+	storyPresenters := []*storyPresenter{}
+	for i, st := range stories {
+		pos := 1 + i + (page * s.config.StoriesPerPage)
+		pr := newStoryPresenter(&st.Story, pos)
+		s.Logger.Debug().Msgf("%v", st)
+		if st.Up.Valid && st.Up.Bool {
+			pr.Upvoted = true
+		} else {
+			pr.Upvoted = false
+		}
+		storyPresenters = append(storyPresenters, pr)
+	}
+
+	vars := map[string]interface{}{
+		"Stories":  storyPresenters,
+		"Session":  data,
+		"NextPage": page + 1,
+		"PrevPage": page - 1,
+	}
+
+	err = tmpl.Execute(res, vars)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to render template")
+		http.Error(res, "Failed to render template", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
+	res.Header().Set("Content-Type", "text/html")
+
+	if req.Method != "GET" {
+		http.Error(res, "Only GET is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var page int
+	rawPage, ok := req.URL.Query()["page"]
+	if ok && len(rawPage) > 0 {
+		page, _ = strconv.Atoi(rawPage[0])
+	}
+
+	stories, err := s.store.ListStories(page, s.config.StoriesPerPage)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to list stories")
+		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
+		return
+	}
+
+	storyPresenters := []*storyPresenter{}
+	for i, st := range stories {
+		pos := 1 + i + (page * s.config.StoriesPerPage)
+		storyPresenters = append(storyPresenters, newStoryPresenter(st, pos))
+	}
+
+	vars := map[string]interface{}{
+		"Stories":  storyPresenters,
+		"Session":  nil,
+		"NextPage": page + 1,
+		"PrevPage": page - 1,
+	}
+
+	err = tmpl.Execute(res, vars)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to render template")
+		http.Error(res, "Failed to render template", http.StatusInternalServerError)
+		return
+	}
+}
+
 func (s *Server) HandleSubmit() httprouter.Handle {
-	tmpl, err := template.New("submit.html").Funcs(helpers).ParseFiles("assets/templates/submit.html", "assets/templates/_header.html", "assets/templates/_footer.html")
+	tmpl, err := template.New("submit.html").Funcs(helpers).ParseFiles(
+		"assets/templates/submit.html",
+		"assets/templates/_header.html",
+		"assets/templates/_footer.html")
 	if err != nil {
 		s.Logger.Fatal().Err(err).Msg("Failed to parse template")
 	}
@@ -357,7 +444,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 
 		data, err := s.CurrentUser(req)
 		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
+			s.Logger.Warn().Err(err).Msg("Failuped to fetch Github user")
 			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
 			return
 		}
@@ -428,8 +515,8 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		// prepare the user
 		userSession, err := s.authService.CurrentUser(req)
 		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
-			http.Error(res, "Failed to fetch current user", http.StatusInternalServerError)
+			s.Logger.Error().Err(err).Msg("Failed to authenticate user")
+			http.Error(res, "Failed to authenticate user", http.StatusInternalServerError)
 			return
 		}
 
@@ -469,6 +556,38 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	}
 }
 
-func (s *Server) CurrentUser(req *http.Request) (*authentication.User, error) {
-	return s.authService.CurrentUser(req)
+func (s *Server) HandleVoteStoryAction() httprouter.Handle {
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		id := params.ByName("id")
+		_, err := s.store.FindStory(id)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to find story")
+			http.Error(res, "Failed to find story", http.StatusNotFound)
+			return
+		}
+
+		userSession, err := s.CurrentUser(req)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to authenticate user")
+			http.Error(res, "Failed to authenticate user", http.StatusInternalServerError)
+			return
+		}
+
+		userRecord, err := s.store.FindUserByLogin(userSession.Login)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
+			return
+		}
+
+		err = s.store.CreateOrUpdateVoteOnStory(id, userRecord.ID, true)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to create upvote")
+			http.Error(res, "Failed to create upvote", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(res, req, req.Header.Get("Referer"), http.StatusFound)
+		return
+	}
 }

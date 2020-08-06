@@ -1,6 +1,16 @@
 {{define "story"}}
 <li class="list-group-item">
   <span class="text-secondary">{{.Pos}}</span>
+  <div class="voters">
+	  <form method="post" class="upvoter" action="/stories/{{.ID}}/votes">
+		  <input type="hidden" name="up" value="true">
+		  {{if not .Upvoted}}
+		  <button type="submit" name="submit" value="submit"></button>
+		  {{else}}
+		  <div class="placeholder"></div>
+		  {{end}}
+	  </form>
+  </div>
   <a href="{{.URL}}">{{.Title | title}}</a>
   <br/>
 

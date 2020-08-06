@@ -3,8 +3,8 @@ CREATE TABLE stories (
 	title varchar(255),
 	url varchar(255),
 	body text,
-	score integer,
+	score integer default 0,
 	author_id integer NOT NULL,
-	comments_count int DEFAULT 0,
+	comments_count integer DEFAULT 0,
 	created_at timestamp NOT NULL
 );

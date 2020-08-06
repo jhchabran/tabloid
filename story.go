@@ -1,6 +1,9 @@
 package tabloid
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 type Story struct {
 	ID            int64     `db:"id"`
@@ -14,13 +17,19 @@ type Story struct {
 	CreatedAt     time.Time `db:"created_at"`
 }
 
+type StorySeenByUser struct {
+	Story
+	UserId int64        `db:"user_id"`
+	Up     sql.NullBool `db:"up"`
+}
+
 func NewStory(title string, body string, authorID int64, url string) *Story {
 	return &Story{
 		Title:     title,
 		Body:      body,
-		Score:     1,
+		Score:     0,
 		AuthorID:  authorID,
 		URL:       url,
-		CreatedAt: time.Now(),
+		CreatedAt: NowFunc(),
 	}
 }

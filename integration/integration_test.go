@@ -13,12 +13,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid"
 	"github.com/jhchabran/tabloid/authentication/fake_auth"
 	"github.com/jhchabran/tabloid/pgstore"
 	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -56,18 +57,18 @@ func (suite *IntegrationTestSuite) SetupTest() {
 	}
 
 	// prepare components
-	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
-	sessionStore := sessions.NewCookieStore([]byte("test"))
-	suite.fakeAuth = fake_auth.New(sessionStore)
 	w := testingLogWriter{suite: &suite.Suite}
 	output := zerolog.ConsoleWriter{Out: &w, NoColor: true}
 	logger := zerolog.New(output)
+	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
+	sessionStore := sessions.NewCookieStore([]byte("test"))
+	suite.fakeAuth = fake_auth.New(sessionStore, logger)
 
 	suite.server = tabloid.NewServer(config, logger, suite.pgStore, suite.fakeAuth)
 	suite.testServer = httptest.NewServer(suite.server)
 	suite.fakeAuth.SetServerURL(suite.testServer.URL)
 
-	assert.Nil(suite.T(), suite.server.Prepare())
+	require.Nil(suite.T(), suite.server.Prepare())
 	// inserts first user used for existing posts, with id=1
 	err = suite.pgStore.DB().Get(&suite.existingUserID,
 		"INSERT INTO users (name, email, created_at, last_login_at) VALUES ('alpha', 'alpha@email.com', $1, $2) RETURNING id",
@@ -81,6 +82,7 @@ func (suite *IntegrationTestSuite) TearDownTest() {
 	suite.pgStore.DB().MustExec("TRUNCATE TABLE stories;")
 	suite.pgStore.DB().MustExec("TRUNCATE TABLE comments;")
 	suite.pgStore.DB().MustExec("TRUNCATE TABLE users;")
+	suite.pgStore.DB().MustExec("TRUNCATE TABLE votes;")
 }
 
 func TestIntegrationTestSuite(t *testing.T) {
@@ -91,9 +93,9 @@ func (suite *IntegrationTestSuite) TestEmptyIndex() {
 	t := suite.T()
 
 	resp, err := http.Get(suite.testServer.URL)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 }
 
@@ -108,23 +110,23 @@ func (suite *IntegrationTestSuite) TestIndexWithStory() {
 		AuthorID:  suite.existingUserID,
 		CreatedAt: time.Now(),
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	resp, err := http.Get(suite.testServer.URL)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
 
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
-	assert.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
-	assert.True(t, strings.Contains(string(body), "foobar"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com"))
+	require.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
+	require.True(t, strings.Contains(string(body), "Foobar"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com"))
 }
 
 func (suite *IntegrationTestSuite) TestSubmitStory() {
@@ -135,9 +137,9 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 		Jar: cookieJar,
 	}
 	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -145,17 +147,17 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 
 	// test for the form being rendered
 	resp, err = client.Get(suite.testServer.URL + "/submit")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
-	assert.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
-	assert.True(t, strings.Contains(string(body), "id=\"submit-form\""))
+	require.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
+	require.True(t, strings.Contains(string(body), "id=\"submit-form\""))
 
 	// test for submitting the form
 	values := url.Values{
@@ -164,18 +166,18 @@ func (suite *IntegrationTestSuite) TestSubmitStory() {
 		"body":  []string{"foobar"},
 	}
 	resp, err = client.PostForm(suite.testServer.URL+"/submit", values)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
-	assert.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
-	assert.True(t, strings.Contains(string(body), "Captain Nemo"))
-	assert.True(t, strings.Contains(string(body), "href=\"http://duckduckgo.com\""))
+	require.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
+	require.True(t, strings.Contains(string(body), "Captain Nemo"))
+	require.True(t, strings.Contains(string(body), "href=\"http://duckduckgo.com\""))
 }
 
 func (suite *IntegrationTestSuite) TestAuthentication() {
@@ -186,15 +188,15 @@ func (suite *IntegrationTestSuite) TestAuthentication() {
 		Jar: cookieJar,
 	}
 	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
-	assert.True(t, strings.Contains(string(body), "fakeLogin"))
+	require.True(t, strings.Contains(string(body), "fakeLogin"))
 }
 
 func (suite *IntegrationTestSuite) TestSubmitComment() {
@@ -215,30 +217,30 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 		AuthorID:  suite.existingUserID,
 		CreatedAt: time.Now(),
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// authenticate
 	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
-	// assert that comment count is set to zero and correctly pluralized on the homepage
-	assert.True(t, strings.Contains(string(body), "0 Comments"))
+	// require that comment count is set to zero and correctly pluralized on the homepage
+	require.True(t, strings.Contains(string(body), "0 Comments"))
 
 	// find the link to the story
 	storyRegexp := regexp.MustCompile(`(/stories/\d+/comments)`)
 	path := storyRegexp.FindString(string(body))
-	assert.NotEmpty(t, path, "Story path was found empty")
+	require.NotEmpty(t, path, "Story path was found empty")
 	storyUrl := suite.testServer.URL + path
 
 	// get that page
 	resp, err = client.Get(storyUrl)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
@@ -250,34 +252,34 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 	}
 
 	resp, err = client.PostForm(storyUrl, values)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
-	assert.True(t, strings.Contains(string(body), "very insightful comment"))
+	require.True(t, strings.Contains(string(body), "very insightful comment"))
 
 	// initial score is always 1
-	assert.True(t, strings.Contains(string(body), "1 by alpha, today"))
+	require.Contains(t, string(body), "1 by alpha, today")
 
 	// ensure that comments get pluralized properly on the homepage
 	resp2, err := client.Get(suite.testServer.URL)
 	body2, err := ioutil.ReadAll(resp2.Body)
 	defer resp2.Body.Close()
-	assert.Nil(t, err)
-	assert.True(t, strings.Contains(string(body2), "1 Comment"))
+	require.Nil(t, err)
+	require.True(t, strings.Contains(string(body2), "1 Comment"))
 
 	// submit a subcomment
 	// get the form hidden input
 	// this should probably get refactored into something more automated and robust as we add more forms to the app
 	parentCommentRegexp := regexp.MustCompile(`<input type="hidden" name="parent-id" value="(\d+)">`)
 	matches := parentCommentRegexp.FindAllStringSubmatch(string(body), -1)
-	assert.Len(t, matches, 1, "could not find parent comment id hidden input")
+	require.Len(t, matches, 1, "could not find parent comment id hidden input")
 	parentCommentID := matches[0][1]
-	assert.NotEmpty(t, parentCommentID, "Parent comment id was found empty")
+	require.NotEmpty(t, parentCommentID, "Parent comment id was found empty")
 
 	// submit a subcomment
 	values = url.Values{
@@ -286,23 +288,23 @@ func (suite *IntegrationTestSuite) TestSubmitComment() {
 	}
 
 	resp, err = client.PostForm(storyUrl, values)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
 	// ensure that the comment body is present
-	assert.True(t, strings.Contains(string(body), `quite logical subcomment`))
+	require.True(t, strings.Contains(string(body), `quite logical subcomment`))
 
 	// ensure that comments get pluralized properly
 	resp2, err = client.Get(suite.testServer.URL + "/")
 	body2, err = ioutil.ReadAll(resp2.Body)
 	defer resp2.Body.Close()
-	assert.Nil(t, err)
-	assert.True(t, strings.Contains(string(body2), "2 Comments"))
+	require.Nil(t, err)
+	require.True(t, strings.Contains(string(body2), "2 Comments"))
 }
 
 func (suite *IntegrationTestSuite) TestPagination() {
@@ -319,82 +321,184 @@ func (suite *IntegrationTestSuite) TestPagination() {
 			AuthorID:  suite.existingUserID,
 			CreatedAt: time.Now(),
 		})
-		assert.NoError(t, err)
+		require.NoError(t, err)
 	}
 
 	// get the homepage
 	resp, err := http.Get(suite.testServer.URL)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
 
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// check that we get the latest stories
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/19"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/18"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/17"))
-	assert.False(t, strings.Contains(string(body), "http://foobar.com/3"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/19"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/18"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/17"))
+	require.False(t, strings.Contains(string(body), "http://foobar.com/3"))
 
 	// check that there is no prev link on the first page
 	paginationLink := regexp.MustCompile(`<a href="(/?page=\d+)">Prev</a>`)
 	path := paginationLink.FindString(string(body))
-	assert.Empty(t, path)
+	require.Empty(t, path)
 
 	// click the next link
 	paginationLink = regexp.MustCompile(`<a href="(/\?page=\d+)">Next</a>`)
 	matches := paginationLink.FindStringSubmatch(string(body))
-	assert.Equal(t, 2, len(matches))
+	require.Equal(t, 2, len(matches))
 	path = matches[1]
-	assert.NotEmpty(t, path, "Pagination link not found")
+	require.NotEmpty(t, path, "Pagination link not found")
 	nextPage := suite.testServer.URL + path
 
 	resp, err = http.Get(nextPage)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
 
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// check that we get the next page of stories
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/16"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/15"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/14"))
-	assert.False(t, strings.Contains(string(body), "http://foobar.com/19"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/16"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/15"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/14"))
+	require.False(t, strings.Contains(string(body), "http://foobar.com/19"))
 
 	// click the prev link
 	paginationLink = regexp.MustCompile(`<a href="(/\?page=\d+)">Prev</a>`)
 	matches = paginationLink.FindStringSubmatch(string(body))
-	assert.Equal(t, 2, len(matches))
+	require.Equal(t, 2, len(matches))
 	path = matches[1]
-	assert.NotEmpty(t, path, "Pagination link not found")
+	require.NotEmpty(t, path, "Pagination link not found")
 	nextPage = suite.testServer.URL + path
 
 	resp, err = http.Get(nextPage)
-	assert.NoError(t, err)
-	assert.NotNil(t, resp)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
 
 	if resp != nil {
-		assert.Equal(t, 200, resp.StatusCode)
+		require.Equal(t, 200, resp.StatusCode)
 	}
 
 	body, err = ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// check that we are back on the homepage
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/19"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/18"))
-	assert.True(t, strings.Contains(string(body), "http://foobar.com/17"))
-	assert.False(t, strings.Contains(string(body), "http://foobar.com/16"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/19"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/18"))
+	require.True(t, strings.Contains(string(body), "http://foobar.com/17"))
+	require.False(t, strings.Contains(string(body), "http://foobar.com/16"))
+}
+
+func (suite *IntegrationTestSuite) TestVotingOnStories() {
+	t := suite.T()
+
+	// enable cookies on the client side for authentication
+	cookieJar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Jar: cookieJar,
+	}
+
+	// create a story to comment on
+	err := suite.pgStore.InsertStory(&tabloid.Story{
+		Title:     "Foobar",
+		URL:       "http://foobar.com",
+		Body:      "Foobaring",
+		AuthorID:  suite.existingUserID,
+		CreatedAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	// authenticate
+	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
+	require.NoError(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	// Find the upvote button
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+
+	require.Nil(t, err)
+	action, ok := doc.Find(".voters form.upvoter").Attr("action")
+	require.True(t, ok)
+	require.NotNil(t, action)
+
+	// referer is used to send back to the page where the vote was done, ie the index
+	req, err := http.NewRequest("POST", suite.testServer.URL+action, nil)
+	require.Nil(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", suite.testServer.URL)
+	resp, err = client.Do(req)
+	require.Nil(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+
+	// The story score should be 2 (original upvote plus this one)
+	require.Contains(t, doc.Find("span.story-meta").Text(), "2 by alpha, today")
+
+	// There shouldn't be an upvote button anymore for this user
+	require.Empty(t, doc.Find(".voters form.upvoter button").Nodes)
+
+	// Log out and upvote with a different user
+	resp, err = client.Get(suite.testServer.URL + "/oauth/destroy")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+
+	// Check that the upvote button is present and sends to login for unathenticated users
+	defer resp.Body.Close()
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	href, ok := doc.Find("a.voters-inactive").Attr("href")
+	require.Truef(t, ok, "cannot find placeholder for unathenticated upvotes")
+	require.Equal(t, href, "/oauth/start")
+
+	// Login with a different user, the fake_auth package will create a new one for each subsequent login
+	resp, err = client.Get(suite.testServer.URL + "/oauth/start")
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+	defer resp.Body.Close()
+
+	// Upvote again
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+
+	require.Nil(t, err)
+	action, ok = doc.Find(".voters form.upvoter").Attr("action")
+	require.True(t, ok)
+	require.NotNil(t, action)
+
+	// referer is used to send back to the page where the vote was done, ie the index
+	req, err = http.NewRequest("POST", suite.testServer.URL+action, nil)
+	require.Nil(t, err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", suite.testServer.URL)
+	resp, err = client.Do(req)
+	require.Nil(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	// The story score should be now be 3
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	require.Contains(t, doc.Find("span.story-meta").Text(), "3 by alpha, today")
+
+	// There shouldn't be an upvote button anymore for this second user
+	require.Empty(t, doc.Find("a.voters-inactive").Nodes)
 }

@@ -2,12 +2,12 @@ package fake_auth
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
+	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
 
@@ -19,11 +19,13 @@ type Handler struct {
 	sessionStore *sessions.CookieStore
 	serverUrl    string
 	counter      int // used to return a different user for each auth
+	logger       zerolog.Logger
 }
 
-func New(sessionStore *sessions.CookieStore) *Handler {
+func New(sessionStore *sessions.CookieStore, logger zerolog.Logger) *Handler {
 	return &Handler{
 		sessionStore: sessionStore,
+		logger:       logger.With().Str("component", "fake_auth").Logger(),
 	}
 }
 
@@ -41,6 +43,7 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 		Login:     "fakeLogin" + strconv.Itoa(h.counter),
 		AvatarURL: "https://www.placecage.com/g/200/200",
 	}
+	h.logger.Debug().Str("login", userSession.Login).Msg("authenticated")
 	b, err := json.Marshal(userSession)
 	if err != nil {
 		return nil, err
@@ -63,7 +66,6 @@ func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
 	var b []byte
 	b, ok := session.Values["user"].([]byte)
 	if !ok {
-		log.Println("no session")
 		return nil, nil
 	}
 
@@ -89,6 +91,8 @@ func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// make subsequent login behave as a new user
+	h.counter++
 	http.Redirect(res, req, h.serverUrl+"/oauth/authorize", 302)
 }
 

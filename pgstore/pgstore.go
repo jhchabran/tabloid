@@ -50,6 +50,22 @@ func (s *PGStore) ListStories(page int, perPage int) ([]*tabloid.Story, error) {
 	return stories, nil
 }
 
+func (s *PGStore) ListStoriesWithVotes(userID int64, page int, perPage int) ([]*tabloid.StorySeenByUser, error) {
+	stories := []*tabloid.StorySeenByUser{}
+	err := s.db.Select(&stories,
+		`SELECT stories.*, users.name as author, users.id as user_id, votes.up as up
+		FROM stories
+		JOIN users ON stories.author_id = users.id
+		LEFT JOIN votes ON stories.id = votes.story_id AND votes.user_id = $1
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		userID, perPage, page*perPage)
+	if err != nil {
+		return nil, err
+	}
+
+	return stories, nil
+}
+
 func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 	story := tabloid.Story{}
 	err := s.db.Get(&story, "SELECT stories.*, users.name as author FROM stories JOIN users ON stories.author_id = users.id WHERE stories.id=$1", ID)
@@ -62,8 +78,18 @@ func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 
 func (s *PGStore) InsertStory(story *tabloid.Story) error {
 	var id int64
-	err := s.db.Get(&id, "INSERT INTO stories (title, url, body, score, author_id, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
-		story.Title, story.URL, story.Body, story.Score, story.AuthorID, time.Now(),
+	now := time.Now()
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	err = sqlx.Get(
+		tx,
+		&id,
+		"INSERT INTO stories (title, url, body, author_id, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		story.Title, story.URL, story.Body, story.AuthorID, now,
 	)
 
 	if err != nil {
@@ -71,6 +97,24 @@ func (s *PGStore) InsertStory(story *tabloid.Story) error {
 	}
 
 	story.ID = id
+
+	// a story being created_at always comes with its accompanying upvote from its submitter.
+	_, err = tx.Exec(
+		"INSERT INTO votes (story_id, up, user_id, created_at) VALUES ($1, $2, $3, $4)",
+		id, true, story.AuthorID, now)
+
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	// we don't need to re-read from the database, it's the story creation, it can only have one upvote, the one
+	// from the author, added by a trigger on the upvote table
+	story.Score = 1
 
 	return nil
 }
@@ -113,6 +157,18 @@ func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
 func (s *PGStore) CreateOrUpdateUser(login string, email string) error {
 	now := time.Now()
 	_, err := s.db.Exec("INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5", login, email, now, now, now)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *PGStore) CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool) error {
+	now := time.Now()
+	_, err := s.db.Exec("INSERT INTO votes (story_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, story_id) WHERE comment_id IS NULL DO UPDATE SET up = $5",
+		storyID, userID, up, now, up)
 
 	if err != nil {
 		return err

@@ -3,6 +3,7 @@ module github.com/jhchabran/tabloid
 go 1.13
 
 require (
+	github.com/PuerkitoBio/goquery v1.5.1
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/google/go-github v17.0.0+incompatible

@@ -13,25 +13,62 @@
 	display:block; /*showing the element*/
 }
 
+.voters {
+	display: inline;
+	position: relative;
+	top: -0.3em;
+}
+
+.voters form {
+	display: inline;
+}
+
+.voters button {
+	background: none;
+	border: none;
+	cursor: pointer;
+	font-size: 1em;
+	width: 10px;
+	height: 10px;
+	background-size: 10px;
+	background-image: url("/static/grayarrow2x.gif");
+	background-repeat: no-repeat;
+}
+
+.voters .placeholder {
+	display: inline-block;
+	width: 16px;
+	height: 10px;
+}
+
+.voters-inactive img {
+	width: 10px;
+	height: 10px;
+}
+
+.voters button:focus {
+	outline: none;
+}
+
 .avatar {
 	height: 2em;
 }
 
 .story-meta {
-  font-size: 0.7em
+	font-size: 0.7em
 }
 
 .story-meta a {
-  text-decoration: none;
+	text-decoration: none;
 }
 
 .story-meta a:hover {
-  text-decoration: underline;
+	text-decoration: underline;
 }
 
 ul.comments-tree {
-  list-style: none;
-  padding-left: 0;
+	list-style: none;
+	padding-left: 0;
 }
 
 ul.comments-tree li {

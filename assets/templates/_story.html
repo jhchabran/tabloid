@@ -1,15 +1,29 @@
 {{define "story"}}
 <li class="list-group-item">
-  <span class="text-secondary">{{.Pos}}</span>
-  <a href="{{.URL}}">{{.Title | title}}</a>
+  <span class="text-secondary">{{.Story.Pos}}</span>
+  {{if .Session}}
+  <div class="voters">
+	  <form method="post" class="upvoter" action="/stories/{{.Story.ID}}/votes">
+		  <input type="hidden" name="up" value="true">
+		  {{if not .Story.Upvoted}}
+		  <button type="submit" name="submit" value="submit"></button>
+		  {{else}}
+		  <div class="placeholder"></div>
+		  {{end}}
+	  </form>
+  </div>
+  {{else}}
+  <a href="/oauth/start" class="voters-inactive"><img src="/static/grayarrow2x.gif" /></a>
+  {{end}}
+  <a href="{{.Story.URL}}">{{.Story.Title | title}}</a>
   <br/>
 
   <span class="story-meta text-secondary pl-2">
-  	{{.Score}} by {{.Author}}, {{.CreatedAt | daysAgo}} |
-	{{if ne .CommentsCount 1}}
-    <a class="link-secondary" href="/stories/{{.ID}}/comments">{{.CommentsCount}} Comments</a>
+  	{{.Story.Score}} by {{.Story.Author}}, {{.Story.CreatedAt | daysAgo}} |
+	{{if ne .Story.CommentsCount 1}}
+    <a class="link-secondary" href="/stories/{{.Story.ID}}/comments">{{.Story.CommentsCount}} Comments</a>
 	{{else}}
-    <a class="link-secondary" href="/stories/{{.ID}}/comments">{{.CommentsCount}} Comment</a>
+    <a class="link-secondary" href="/stories/{{.Story.ID}}/comments">{{.Story.CommentsCount}} Comment</a>
 	{{end}}
   </span>
 </li>

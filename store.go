@@ -10,5 +10,5 @@ type Store interface {
 	InsertComment(comment *Comment) error
 	FindUserByLogin(login string) (*User, error)
 	CreateOrUpdateUser(login string, email string) error
-	CreateOrUpdateVoteOnStory(storyID string, userID int64, up bool) error
+	CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool) error
 }

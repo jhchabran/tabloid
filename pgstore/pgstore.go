@@ -165,7 +165,7 @@ func (s *PGStore) CreateOrUpdateUser(login string, email string) error {
 	return nil
 }
 
-func (s *PGStore) CreateOrUpdateVoteOnStory(storyID string, userID int64, up bool) error {
+func (s *PGStore) CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool) error {
 	now := time.Now()
 	_, err := s.db.Exec("INSERT INTO votes (story_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, story_id) WHERE comment_id IS NULL DO UPDATE SET up = $5",
 		storyID, userID, up, now, up)

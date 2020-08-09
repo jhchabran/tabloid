@@ -580,7 +580,12 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 			return
 		}
 
-		err = s.store.CreateOrUpdateVoteOnStory(id, userRecord.ID, true)
+		iid, err := strconv.Atoi(id)
+		if err != nil {
+			http.Error(res, "Wrong format for story id", http.StatusBadRequest)
+			return
+		}
+		err = s.store.CreateOrUpdateVoteOnStory(int64(iid), userRecord.ID, true)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to create upvote")
 			http.Error(res, "Failed to create upvote", http.StatusInternalServerError)

@@ -57,12 +57,12 @@ func (suite *IntegrationTestSuite) SetupTest() {
 	}
 
 	// prepare components
-	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
-	sessionStore := sessions.NewCookieStore([]byte("test"))
-	suite.fakeAuth = fake_auth.New(sessionStore)
 	w := testingLogWriter{suite: &suite.Suite}
 	output := zerolog.ConsoleWriter{Out: &w, NoColor: true}
 	logger := zerolog.New(output)
+	suite.pgStore = pgstore.New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
+	sessionStore := sessions.NewCookieStore([]byte("test"))
+	suite.fakeAuth = fake_auth.New(sessionStore, logger)
 
 	suite.server = tabloid.NewServer(config, logger, suite.pgStore, suite.fakeAuth)
 	suite.testServer = httptest.NewServer(suite.server)
@@ -125,7 +125,7 @@ func (suite *IntegrationTestSuite) TestIndexWithStory() {
 	require.Nil(t, err)
 
 	require.True(t, strings.Contains(string(body), "<title>Tabloid</title>"))
-	require.True(t, strings.Contains(string(body), "foobar"))
+	require.True(t, strings.Contains(string(body), "Foobar"))
 	require.True(t, strings.Contains(string(body), "http://foobar.com"))
 }
 
@@ -414,7 +414,6 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	err := suite.pgStore.InsertStory(&tabloid.Story{
 		Title:     "Foobar",
 		URL:       "http://foobar.com",
-		Score:     1,
 		Body:      "Foobaring",
 		AuthorID:  suite.existingUserID,
 		CreatedAt: time.Now(),
@@ -450,7 +449,7 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	defer resp.Body.Close()
 	doc, err = goquery.NewDocumentFromReader(resp.Body)
 
-	// The story score should be 1
+	// The story score should be 2 (original upvote plus this one)
 	require.Contains(t, doc.Find("span.story-meta").Text(), "2 by alpha, today")
 
 	// There shouldn't be an upvote button anymore for this user
@@ -461,6 +460,13 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, 200, resp.StatusCode)
+
+	// Check that the upvote button is present and sends to login for unathenticated users
+	defer resp.Body.Close()
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	href, ok := doc.Find("a.voters-inactive").Attr("href")
+	require.Truef(t, ok, "cannot find placeholder for unathenticated upvotes")
+	require.Equal(t, href, "/oauth/start")
 
 	// Login with a different user, the fake_auth package will create a new one for each subsequent login
 	resp, err = client.Get(suite.testServer.URL + "/oauth/start")
@@ -489,7 +495,10 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	}
 	defer resp.Body.Close()
 
-	// There shouldn't be an upvote button anymore for this second user
+	// The story score should be now be 3
 	doc, err = goquery.NewDocumentFromReader(resp.Body)
-	require.Empty(t, doc.Find(".voters form.upvoter button").Nodes)
+	require.Contains(t, doc.Find("span.story-meta").Text(), "3 by alpha, today")
+
+	// There shouldn't be an upvote button anymore for this second user
+	require.Empty(t, doc.Find("a.voters-inactive").Nodes)
 }

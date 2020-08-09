@@ -41,6 +41,11 @@
 	height: 10px;
 }
 
+.voters-inactive img {
+	width: 10px;
+	height: 10px;
+}
+
 .voters button:focus {
 	outline: none;
 }

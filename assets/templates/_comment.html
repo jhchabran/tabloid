@@ -1,18 +1,32 @@
 {{define "comment"}}
 <li class="">
-	<span class="story-meta text-secondary">
-		{{.Author}}, {{.CreatedAt | daysAgo}}
+  {{if .Session}}
+  <div class="voters">
+	  <form method="post" class="upvoter" action="/story/{{.Comment.StoryID}}/comments/{{.Comment.ID}}/votes/">
+		  <input type="hidden" name="up" value="true">
+		  {{if not .Comment.Upvoted}}
+		  <button type="submit" name="submit" value="submit"></button>
+		  {{else}}
+		  <button type="submit" name="submit" value="submit" class="placeholder" disabled></button>
+		  {{end}}
+	  </form>
+  </div>
+  {{else}}
+	<a href="/oauth/start" class="voters-inactive"><img src="/static/grayarrow2x.gif" /></a>
+	{{end}}
+	<span class="comment-meta text-secondary">
+		{{.Comment.Author}}, {{.Comment.Score}} points, {{.Comment.CreatedAt | daysAgo}}
 	</span>
-	<p class="mb-0" >{{.Body}}</p>
-	<input class="trigger" id="{{.ID}}" type="checkbox">
-	<label class="story-meta text-secondary" for="{{.ID}}">Reply</label>
+	<p class="mb-0" >{{.Comment.Body}}</p>
+	<input class="trigger" id="{{.Comment.ID}}" type="checkbox">
+	<label class="story-meta text-secondary" for="{{.Comment.ID}}">Reply</label>
 	<div class="">
-		{{template "comment_form" .}}
+		{{template "comment_form" .Comment}}
 	</div>
 
 	<ul class="comments">
-		{{range .Children}}
-		{{template "comment" .}}
+		{{range .Comment.Children}}
+		{{template "comment" dict "Comment" . "Session" $.Session}}
 		{{end}}
 	</ul>
 </li>

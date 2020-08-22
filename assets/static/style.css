@@ -35,10 +35,10 @@
 	background-repeat: no-repeat;
 }
 
-.voters .placeholder {
-	display: inline-block;
-	width: 16px;
-	height: 10px;
+.voters button.placeholder {
+	background-image: url("/static/grayarrow2x-active.gif");
+  pointer-events: none;
+  cursor: not-allowed;
 }
 
 .voters-inactive img {

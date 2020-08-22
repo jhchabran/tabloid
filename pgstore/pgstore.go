@@ -78,7 +78,7 @@ func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 
 func (s *PGStore) InsertStory(story *tabloid.Story) error {
 	var id int64
-	now := time.Now()
+	now := tabloid.NowFunc()
 	tx, err := s.db.Beginx()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (s *PGStore) InsertStory(story *tabloid.Story) error {
 
 	story.ID = id
 
-	// a story being created_at always comes with its accompanying upvote from its submitter.
+	// a story being created always comes with its accompanying upvote from its submitter.
 	_, err = tx.Exec(
 		"INSERT INTO votes (story_id, up, user_id, created_at) VALUES ($1, $2, $3, $4)",
 		id, true, story.AuthorID, now)
@@ -129,10 +129,46 @@ func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 	return comments, nil
 }
 
+func (s *PGStore) ListCommentsWithVotes(storyID string, userID int64) ([]*tabloid.CommentSeenByUser, error) {
+	comments := []*tabloid.CommentSeenByUser{}
+	err := s.db.Select(&comments,
+		`SELECT comments.*, users.name as author, users.id as user_id, votes.up as up
+		FROM comments
+		JOIN users ON comments.author_id = users.id
+		LEFT JOIN votes ON comments.id = votes.comment_id AND votes.user_id = $1
+		ORDER BY created_at`,
+		userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return comments, nil
+}
+
+func (s *PGStore) FindComment(ID string) (*tabloid.Comment, error) {
+	comment := tabloid.Comment{}
+	err := s.db.Get(&comment, "SELECT comments.* FROM comments WHERE id=$1", ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &comment, nil
+}
+
 func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	var id int64
-	err := s.db.Get(&id, "INSERT INTO comments (story_id, parent_comment_id, body, upvotes, downvotes, author_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
-		comment.StoryID, comment.ParentCommentID, comment.Body, comment.Upvotes, comment.Downvotes, comment.AuthorID, time.Now(),
+	now := tabloid.NowFunc()
+	tx, err := s.db.Beginx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	err = sqlx.Get(
+		tx,
+		&id,
+		"INSERT INTO comments (story_id, parent_comment_id, body, author_id, created_at) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+		comment.StoryID, comment.ParentCommentID, comment.Body, comment.AuthorID, time.Now(),
 	)
 
 	if err != nil {
@@ -140,6 +176,24 @@ func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	}
 
 	comment.ID = id
+
+	// a comment being created always comes with its accompanying upvote from its submitter.
+	_, err = tx.Exec(
+		"INSERT INTO votes (comment_id, up, user_id, created_at) VALUES ($1, $2, $3, $4)",
+		id, true, comment.AuthorID, now)
+
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	// we don't need to re-read from the database, it's the story creation, it can only have one upvote, the one
+	// from the author, added by a trigger on the upvote table
+	comment.Score = 1
 
 	return nil
 }
@@ -169,6 +223,18 @@ func (s *PGStore) CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool
 	now := time.Now()
 	_, err := s.db.Exec("INSERT INTO votes (story_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, story_id) WHERE comment_id IS NULL DO UPDATE SET up = $5",
 		storyID, userID, up, now, up)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *PGStore) CreateOrUpdateVoteOnComment(commentID int64, userID int64, up bool) error {
+	now := time.Now()
+	_, err := s.db.Exec("INSERT INTO votes (comment_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, comment_id) WHERE story_id IS NULL DO UPDATE SET up = $5",
+		commentID, userID, up, now, up)
 
 	if err != nil {
 		return err

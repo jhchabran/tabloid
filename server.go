@@ -136,8 +136,10 @@ func (s *Server) Prepare() error {
 	s.router.POST("/submit", s.HandleSubmitAction())
 	s.router.GET("/stories/:id/comments", s.HandleShow())
 	s.router.POST("/stories/:id/comments", s.HandleSubmitCommentAction())
-	// s.router.POST("/stories/:story_id/comments/:id/votes", s.HandleVoteCommentAction())
 	s.router.POST("/stories/:id/votes", s.HandleVoteStoryAction())
+	// httprouter conflicts if we use /stories/:story_id, waiting on httprouter v2
+	// https://github.com/julienschmidt/httprouter/issues/175#issuecomment-270075906
+	s.router.POST("/story/:story_id/comments/:id/votes", s.HandleVoteCommentAction())
 
 	return nil
 }
@@ -298,7 +300,6 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 	for i, st := range stories {
 		pos := 1 + i + (page * s.config.StoriesPerPage)
 		pr := newStoryPresenter(&st.Story, pos)
-		s.Logger.Debug().Msgf("%v", st)
 		if st.Up.Valid && st.Up.Bool {
 			pr.Upvoted = true
 		} else {
@@ -383,7 +384,7 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 			return
 		}
 
-		// redirect if unathenticated
+		// redirect if unauthenticated
 		if userSession == nil {
 			http.Redirect(res, req, "/", http.StatusFound)
 			return
@@ -424,34 +425,104 @@ func (s *Server) HandleShow() httprouter.Handle {
 			return
 		}
 
-		id := params.ByName("id")
-		story, err := s.store.FindStory(id)
-		if err != nil {
-			s.Logger.Error().Err(err).Str("id", id).Msg("Failed to find story")
-			// TODO deal with 404
-			http.Error(res, "Failed to find story", http.StatusInternalServerError)
+		if data != nil {
+			s.Logger.Debug().Msg("authenticated")
+			s.HandleShowAuthenticated(res, req, params, tmpl)
+		} else {
+			s.Logger.Debug().Msg("unauthenticated")
+			s.HandleShowUnauthenticated(res, req, params, tmpl)
 		}
+	}
+}
 
-		comments, err := s.store.ListComments(strconv.Itoa(int(story.ID)))
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to list comments")
-			http.Error(res, "Failed to list comments", http.StatusInternalServerError)
-			return
-		}
+func (s *Server) HandleShowUnauthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
+	data, err := s.CurrentUser(req)
+	if err != nil {
+		s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
+		http.Error(res, "Failed to fetch Github user", http.StatusMethodNotAllowed)
+		return
+	}
 
-		commentsTree := NewCommentPresentersTree(comments)
+	id := params.ByName("id")
+	story, err := s.store.FindStory(id)
+	if err != nil {
+		s.Logger.Error().Err(err).Str("id", id).Msg("Failed to find story")
+		// TODO deal with 404
+		http.Error(res, "Failed to find story", http.StatusInternalServerError)
+	}
 
-		err = tmpl.Execute(res, map[string]interface{}{
-			"Story":    story,
-			"Comments": commentsTree,
-			"Session":  data,
-		})
+	comments, err := s.store.ListComments(strconv.Itoa(int(story.ID)))
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to list comments")
+		http.Error(res, "Failed to list comments", http.StatusInternalServerError)
+		return
+	}
 
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to render template")
-			http.Error(res, "Failed to render template", http.StatusInternalServerError)
-			return
-		}
+	cc := make([]CommentAccessor, len(comments))
+	for i, c := range comments {
+		cc[i] = c
+	}
+	commentsTree := NewCommentPresentersTree(cc)
+
+	err = tmpl.Execute(res, map[string]interface{}{
+		"Story":    story,
+		"Comments": commentsTree,
+		"Session":  data,
+	})
+
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to render template")
+		http.Error(res, "Failed to render template", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (s *Server) HandleShowAuthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
+	data, err := s.CurrentUser(req)
+	if err != nil {
+		s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
+		http.Error(res, "Failed to fetch Github user", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id := params.ByName("id")
+	story, err := s.store.FindStory(id)
+	if err != nil {
+		s.Logger.Error().Err(err).Str("id", id).Msg("Failed to find story")
+		// TODO deal with 404
+		http.Error(res, "Failed to find story", http.StatusInternalServerError)
+	}
+
+	userRecord, err := s.store.FindUserByLogin(data.Login)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+		http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
+		return
+	}
+
+	comments, err := s.store.ListCommentsWithVotes(strconv.Itoa(int(story.ID)), userRecord.ID)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to list comments")
+		http.Error(res, "Failed to list comments", http.StatusInternalServerError)
+		return
+	}
+
+	cc := make([]CommentAccessor, len(comments))
+	for i, c := range comments {
+		cc[i] = c
+	}
+	commentsTree := NewCommentPresentersTree(cc)
+
+	err = tmpl.Execute(res, map[string]interface{}{
+		"Story":    story,
+		"Comments": commentsTree,
+		"Session":  data,
+	})
+
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to render template")
+		http.Error(res, "Failed to render template", http.StatusInternalServerError)
+		return
 	}
 }
 
@@ -465,7 +536,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
 			return
 		}
-		// redirect if unathenticated
+		// redirect if unauthenticated
 		if data == nil {
 			http.Redirect(res, req, "/", http.StatusFound)
 			return
@@ -570,6 +641,70 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 
 		storyPath := fmt.Sprintf("/stories/%v/comments", story.ID)
 		http.Redirect(res, req, storyPath, http.StatusFound)
+	}
+}
+
+func (s *Server) HandleVoteCommentAction() httprouter.Handle {
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		storyID := params.ByName("story_id")
+		_, err := s.store.FindStory(storyID)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to find story")
+			http.Error(res, "Failed to find story", http.StatusNotFound)
+			return
+		}
+
+		_, err = s.store.FindStory(storyID)
+		if err != nil {
+			http.Error(res, "Story Not found", http.StatusNotFound)
+			return
+		}
+
+		id := params.ByName("id")
+		s.Logger.Debug().Str("id", id).Msg("comment")
+		_, err = s.store.FindComment(id)
+		if err != nil {
+			s.Logger.Debug().Err(err).Msg("comment")
+			http.Error(res, "Comment Not found", http.StatusNotFound)
+			return
+		}
+
+		userSession, err := s.CurrentUser(req)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to authenticate user")
+			http.Error(res, "Failed to authenticate user", http.StatusInternalServerError)
+			return
+		}
+
+		// TODO deal with user not being authenticated
+
+		userRecord, err := s.store.FindUserByLogin(userSession.Login)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
+			return
+		}
+
+		if err != nil {
+			http.Error(res, "Wrong format for story id", http.StatusBadRequest)
+			return
+		}
+
+		iid, err := strconv.Atoi(id)
+		if err != nil {
+			http.Error(res, "Invalid id", http.StatusBadRequest)
+			return
+		}
+
+		err = s.store.CreateOrUpdateVoteOnComment(int64(iid), userRecord.ID, true)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to create upvote")
+			http.Error(res, "Failed to create upvote", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(res, req, req.Header.Get("Referer"), http.StatusFound)
+		return
 	}
 }
 

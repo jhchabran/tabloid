@@ -313,6 +313,7 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 		"Session":  data,
 		"NextPage": page + 1,
 		"PrevPage": page - 1,
+		"CurrPage": page,
 	}
 
 	err = tmpl.Execute(res, vars)
@@ -646,8 +647,16 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 
 func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		// We'll redirect to a given route after submitting this, so we use redir to specify it
+		redir, err := normalizeRedir(req.URL.Query()["redir"])
+		if err != nil {
+			s.Logger.Debug().Err(err).Msg("suspect redir param")
+			http.Error(res, "Suspect redirection", http.StatusBadRequest)
+			return
+		}
+
 		storyID := params.ByName("story_id")
-		_, err := s.store.FindStory(storyID)
+		_, err = s.store.FindStory(storyID)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to find story")
 			http.Error(res, "Failed to find story", http.StatusNotFound)
@@ -703,15 +712,34 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 			return
 		}
 
-		http.Redirect(res, req, req.Header.Get("Referer"), http.StatusFound)
+
+		http.Redirect(res, req, redir, http.StatusFound)
+		s.Logger.Debug().Str("ref", req.Referer()).Msg("ss")
 		return
 	}
 }
 
+// TODO move this, and test it
+func normalizeRedir(redir []string) (string, error) {
+	if len(redir) != 1 { return "", fmt.Errorf("more than one redir path")}
+	if redir[0] == "" { return "", fmt.Errorf("redir can't be empty") }
+	if !strings.HasPrefix(redir[0], "/") { return "", fmt.Errorf("redir must start with a /") }
+
+	return redir[0], nil
+}
+
 func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		// We'll redirect to a given route after submitting this, so we use redir to specify it
+		redir, err := normalizeRedir(req.URL.Query()["redir"])
+		if err != nil {
+			s.Logger.Debug().Err(err).Msg("suspect redir param")
+			http.Error(res, "Suspect redirection", http.StatusBadRequest)
+			return
+		}
+
 		id := params.ByName("id")
-		_, err := s.store.FindStory(id)
+		_, err = s.store.FindStory(id)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to find story")
 			http.Error(res, "Failed to find story", http.StatusNotFound)
@@ -744,7 +772,7 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 			return
 		}
 
-		http.Redirect(res, req, req.Header.Get("Referer"), http.StatusFound)
+		http.Redirect(res, req, redir, http.StatusFound)
 		return
 	}
 }

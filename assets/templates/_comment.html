@@ -2,7 +2,7 @@
 <li class="">
   {{if .Session}}
   <div class="voters">
-	  <form method="post" class="upvoter" action="/story/{{.Comment.StoryID}}/comments/{{.Comment.ID}}/votes/">
+	  <form method="post" class="upvoter" action="/story/{{.Comment.StoryID}}/comments/{{.Comment.ID}}/votes?redir=/stories/{{.Comment.StoryID}}/comments">
 		  <input type="hidden" name="up" value="true">
 		  {{if not .Comment.Upvoted}}
 		  <button type="submit" name="submit" value="submit"></button>

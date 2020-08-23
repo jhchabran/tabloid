@@ -3,7 +3,7 @@
   <span class="text-secondary">{{.Story.Pos}}</span>
   {{if .Session}}
   <div class="voters">
-	  <form method="post" class="upvoter" action="/stories/{{.Story.ID}}/votes">
+	  <form method="post" class="upvoter" action="/stories/{{.Story.ID}}/votes?redir=/?page={{.Page}}">
 		  <input type="hidden" name="up" value="true">
 		  {{if not .Story.Upvoted}}
 		  <button type="submit" name="submit" value="submit"></button>

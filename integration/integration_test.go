@@ -541,6 +541,7 @@ func (suite *IntegrationTestSuite) TestVotingOnComments() {
 	// navigate to the story page
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	path, ok := doc.Find("a.story-comments").Attr("href")
+	t.Log(path)
 	require.Truef(t, true, "Cannot find link to story comments")
 	resp, err = client.Get(suite.testServer.URL + path)
 	require.NoError(t, err)
@@ -557,12 +558,7 @@ func (suite *IntegrationTestSuite) TestVotingOnComments() {
 	require.True(t, ok)
 	require.NotNil(t, action)
 
-	// referer is used to send back to the page where the vote was done, ie the story page
-	req, err := http.NewRequest("POST", suite.testServer.URL + path, nil)
-	require.Nil(t, err)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Referer", suite.testServer.URL + path)
-	resp, err = client.Do(req)
+	resp, err = client.PostForm(suite.testServer.URL + action, nil)
 	require.Nil(t, err)
 	if resp != nil {
 		require.Equal(t, 200, resp.StatusCode)
@@ -616,12 +612,7 @@ func (suite *IntegrationTestSuite) TestVotingOnComments() {
 	require.True(t, ok)
 	require.NotNil(t, action)
 
-	// referer is used to send back to the page where the vote was done, ie the index
-	req, err = http.NewRequest("POST", suite.testServer.URL+action, nil)
-	require.Nil(t, err)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Referer", suite.testServer.URL + path)
-	resp, err = client.Do(req)
+	resp, err = client.PostForm(suite.testServer.URL + action, nil)
 	require.Nil(t, err)
 	if resp != nil {
 		require.Equal(t, 200, resp.StatusCode)

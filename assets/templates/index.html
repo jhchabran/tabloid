@@ -3,7 +3,7 @@
 <div class="row">
   <ul class="list-group list-group-flush">
     {{range .Stories}}
-    {{template "story" dict "Story" . "Session" $.Session}}
+    {{template "story" dict "Story" . "Session" $.Session "Page" $.CurrPage}}
     {{end}}
   </ul>
 </div>

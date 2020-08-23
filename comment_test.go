@@ -33,7 +33,7 @@ func TestNewCommentPresentersTree(t *testing.T) {
 	b1 := NewComment(int64(1), sql.NullInt64{Int64: b.ID, Valid: true}, "", authorID)
 	b1.ID = 8
 
-	comments := []*Comment{
+	comments := []CommentAccessor{
 		a,
 		a1,
 		a2,

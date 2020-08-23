@@ -24,3 +24,15 @@ CREATE TRIGGER update_stories_score
 AFTER INSERT ON votes
 FOR EACH ROW
 	EXECUTE PROCEDURE update_stories_score();
+
+CREATE OR REPLACE FUNCTION update_comments_score() RETURNS TRIGGER AS $$
+BEGIN
+	UPDATE comments SET score = score + (case when NEW.up then 1 else -1 end) WHERE id=NEW.comment_id;
+	RETURN NULL; -- after trigger, result is ignored
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_comments_score
+AFTER INSERT ON votes
+FOR EACH ROW
+	EXECUTE PROCEDURE update_comments_score();

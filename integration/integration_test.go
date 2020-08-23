@@ -1,6 +1,7 @@
 package integration
 
 import (
+	"database/sql"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -453,7 +454,8 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	require.Contains(t, doc.Find("span.story-meta").Text(), "2 by alpha, today")
 
 	// There shouldn't be an upvote button anymore for this user
-	require.Empty(t, doc.Find(".voters form.upvoter button").Nodes)
+	_, ok = doc.Find(".voters form.upvoter button").Attr("disabled")
+	require.Truef(t, ok, "disabled attribute must be present on the button")
 
 	// Log out and upvote with a different user
 	resp, err = client.Get(suite.testServer.URL + "/oauth/destroy")
@@ -471,9 +473,9 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	// Login with a different user, the fake_auth package will create a new one for each subsequent login
 	resp, err = client.Get(suite.testServer.URL + "/oauth/start")
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	require.NotNil(t, resp)
 	require.Equal(t, 200, resp.StatusCode)
-	defer resp.Body.Close()
 
 	// Upvote again
 	doc, err = goquery.NewDocumentFromReader(resp.Body)
@@ -498,6 +500,128 @@ func (suite *IntegrationTestSuite) TestVotingOnStories() {
 	// The story score should be now be 3
 	doc, err = goquery.NewDocumentFromReader(resp.Body)
 	require.Contains(t, doc.Find("span.story-meta").Text(), "3 by alpha, today")
+
+	// There shouldn't be an upvote button anymore for this second user
+	require.Empty(t, doc.Find("a.voters-inactive").Nodes)
+}
+
+func (suite *IntegrationTestSuite) TestVotingOnComments() {
+	t := suite.T()
+
+	// enable cookies on the client side for authentication
+	cookieJar, _ := cookiejar.New(nil)
+	client := &http.Client{
+		Jar: cookieJar,
+	}
+
+	// create a story to comment on
+	story := tabloid.Story{
+		Title:     "Foobar",
+		URL:       "http://foobar.com",
+		Body:      "Foobaring",
+		AuthorID:  suite.existingUserID,
+		CreatedAt: time.Now(),
+	}
+	err := suite.pgStore.InsertStory(&story)
+	require.NoError(t, err)
+
+	// create a root comment
+	comment := tabloid.NewComment(story.ID, sql.NullInt64{}, "foobar", suite.existingUserID)
+	err = suite.pgStore.InsertComment(comment)
+	require.NoError(t, err)
+
+	// authenticate
+	resp, err := client.Get(suite.testServer.URL + "/oauth/start")
+	require.NoError(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	// navigate to the story page
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	path, ok := doc.Find("a.story-comments").Attr("href")
+	t.Log(path)
+	require.Truef(t, true, "Cannot find link to story comments")
+	resp, err = client.Get(suite.testServer.URL + path)
+	require.NoError(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	// Find the upvote button
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	require.Nil(t, err)
+
+	action, ok := doc.Find(".voters form.upvoter").Attr("action")
+	require.True(t, ok)
+	require.NotNil(t, action)
+
+	resp, err = client.PostForm(suite.testServer.URL + action, nil)
+	require.Nil(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+
+	// The story score should be 2 (original upvote plus this one)
+	require.Contains(t, doc.Find("span.comment-meta").Text(), "alpha, 2 points, today")
+
+	// There shouldn't be an upvote button anymore for this user
+	_, ok = doc.Find(".voters form.upvoter button").Attr("disabled")
+	require.Truef(t, ok, "disabled attribute must be present on the button")
+
+	// Log out and upvote with a different user
+	resp, err = client.Get(suite.testServer.URL + "/oauth/destroy")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+
+	// Check that the upvote button is present and sends to login for unathenticated users
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	href, ok := doc.Find("a.voters-inactive").Attr("href")
+	require.Truef(t, ok, "cannot find placeholder for unathenticated upvotes")
+	require.Equal(t, href, "/oauth/start")
+
+	// Login with a different user, the fake_auth package will create a new one for each subsequent login
+	resp, err = client.Get(suite.testServer.URL + "/oauth/start")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.NotNil(t, resp)
+	require.Equal(t, 200, resp.StatusCode)
+
+	// navigate to the story page
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	path, ok = doc.Find("a.story-comments").Attr("href")
+	require.Truef(t, true, "Cannot find link to story comments")
+	resp, err = client.Get(suite.testServer.URL + path)
+	require.NoError(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	// Upvote again
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+
+	require.Nil(t, err)
+	action, ok = doc.Find(".voters form.upvoter").Attr("action")
+	require.True(t, ok)
+	require.NotNil(t, action)
+
+	resp, err = client.PostForm(suite.testServer.URL + action, nil)
+	require.Nil(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	defer resp.Body.Close()
+
+	// The story score should be now be 3
+	doc, err = goquery.NewDocumentFromReader(resp.Body)
+	require.Contains(t, doc.Find("span.comment-meta").Text(), "alpha, 3 points, today")
 
 	// There shouldn't be an upvote button anymore for this second user
 	require.Empty(t, doc.Find("a.voters-inactive").Nodes)

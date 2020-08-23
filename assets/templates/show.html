@@ -22,13 +22,12 @@
 </div>
 
 <div class="row pl-2">
-  <div id="comments">
+  <div class="comments">
     <ul class="comments-tree">
       {{range .Comments}}
-      {{template "comment" .}}
+      {{template "comment" dict "Comment" . "Session" $.Session}}
       {{end}}
     </ul>
   </div>
-
 </div>
 {{template "footer"}}

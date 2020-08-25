@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"encoding/json"
@@ -7,14 +7,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jhchabran/tabloid"
-	"github.com/jhchabran/tabloid/authentication/github_auth"
-	"github.com/jhchabran/tabloid/pgstore"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-type config struct {
+type Config struct {
 	LogLevel           string `json:"log_level"`
 	LogFormat          string `json:"log_format"`
 	DatabaseName       string `json:"database_name"`
@@ -28,11 +25,8 @@ type config struct {
 	Addr               string `json:"addr"`
 }
 
-func main() {
-	// setup logging
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-
-	cfg := config{
+func DefaultConfig() *Config {
+	return &Config{
 		LogLevel:         "info",
 		LogFormat:        "json",
 		DatabaseName:     "tabloid",
@@ -42,54 +36,9 @@ func main() {
 		StoriesPerPage:   10,
 		Addr:             "localhost:8080",
 	}
-
-	err := cfg.load()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Cannot read configuration")
-	}
-
-	level, err := zerolog.ParseLevel(cfg.LogLevel)
-	if err != nil {
-		log.Fatal().Err(err).Str("input", cfg.LogLevel).Msg("Cannot parse log level")
-	}
-	zerolog.SetGlobalLevel(level)
-
-	var logger zerolog.Logger
-	if cfg.LogFormat == "" || cfg.LogFormat == "json" {
-		logger = zerolog.New(os.Stderr).With().Timestamp().Logger()
-	} else {
-		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
-		logger = zerolog.New(output).With().Timestamp().Logger()
-	}
-
-	// setup database
-	pgcfg := fmt.Sprintf(
-		"user=%v dbname=%v sslmode=disable password=%v host=%v",
-		cfg.DatabaseUser,
-		cfg.DatabaseName,
-		cfg.DatabasePassword,
-		cfg.DatabaseHost,
-	)
-	pg := pgstore.New(pgcfg)
-
-	// setup authentication
-	ll := logger.With().Str("component", "github auth").Logger()
-	authService := github_auth.New(cfg.ServerSecret, cfg.GithubClientID, cfg.GithubClientSecret, ll)
-
-	// fire the server
-	s := tabloid.NewServer(&tabloid.ServerConfig{Addr: cfg.Addr, StoriesPerPage: cfg.StoriesPerPage}, logger, pg, authService)
-	err = s.Prepare()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Cannot prepare server")
-	}
-
-	err = s.Start()
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Cannot start server")
-	}
 }
 
-func (c *config) load() error {
+func (c *Config) Load() error {
 	f, err := os.Open("config.json")
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -172,4 +121,21 @@ func (c *config) load() error {
 	}
 
 	return nil
+}
+
+func SetupLogger(cfg *Config) zerolog.Logger {
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+
+	level, err := zerolog.ParseLevel(cfg.LogLevel)
+	if err != nil {
+		log.Fatal().Err(err).Str("input", cfg.LogLevel).Msg("Cannot parse log level")
+	}
+	zerolog.SetGlobalLevel(level)
+
+	if cfg.LogFormat == "" || cfg.LogFormat == "json" {
+		return zerolog.New(os.Stderr).With().Timestamp().Logger()
+	} else {
+		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+		return zerolog.New(output).With().Timestamp().Logger()
+	}
 }

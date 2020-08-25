@@ -712,7 +712,6 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 			return
 		}
 
-
 		http.Redirect(res, req, redir, http.StatusFound)
 		s.Logger.Debug().Str("ref", req.Referer()).Msg("ss")
 		return
@@ -721,9 +720,15 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 
 // TODO move this, and test it
 func normalizeRedir(redir []string) (string, error) {
-	if len(redir) != 1 { return "", fmt.Errorf("more than one redir path")}
-	if redir[0] == "" { return "", fmt.Errorf("redir can't be empty") }
-	if !strings.HasPrefix(redir[0], "/") { return "", fmt.Errorf("redir must start with a /") }
+	if len(redir) != 1 {
+		return "", fmt.Errorf("more than one redir path")
+	}
+	if redir[0] == "" {
+		return "", fmt.Errorf("redir can't be empty")
+	}
+	if !strings.HasPrefix(redir[0], "/") {
+		return "", fmt.Errorf("redir must start with a /")
+	}
 
 	return redir[0], nil
 }

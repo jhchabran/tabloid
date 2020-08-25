@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"regexp"
 	"strings"
@@ -32,7 +33,7 @@ func breakLorem() []string {
 		r := strings.TrimSpace(s)
 		if len(r) > 50 {
 			idx := 0
-			for i, r := range s[50:len(s)] {
+			for i, r := range s[50:] {
 				if r == ' ' {
 					idx = i
 					break
@@ -82,6 +83,7 @@ func main() {
 		}
 	}
 
+	// list all user ids so we can cycle through them to create stories
 	rows, err := pg.DB().Query("SELECT id FROM users")
 	if err != nil {
 		log.Fatal().Err(err).Msg("Can't list users")
@@ -96,9 +98,49 @@ func main() {
 		userIDs = append(userIDs, id)
 	}
 
+	// let's now add the stories
+	var stories []*tabloid.Story
 	for i, title := range strs {
 		authorID := userIDs[i%len(userIDs)]
 		story := tabloid.NewStory(title, "", authorID, "https://duckduckgo.com")
-		pg.InsertStory(story)
+		err = pg.InsertStory(story)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Can't creates story")
+		}
+
+		stories = append(stories, story)
+	}
+
+	// let's add some comments on the stories
+	for i, story := range stories {
+		authorID := userIDs[i%len(userIDs)]
+		body := strs[i%len(strs)]
+
+		comment := tabloid.NewComment(story.ID, sql.NullInt64{}, body, authorID)
+		err := pg.InsertComment(comment)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Can't create comment")
+		}
+
+		// add some subcomments
+		for j := 0; j < i%4; j++ {
+			authorID := userIDs[j%len(userIDs)]
+			body := strs[j%len(strs)]
+			subcomment := tabloid.NewComment(story.ID, sql.NullInt64{Int64: comment.ID, Valid: true}, body, authorID)
+			err := pg.InsertComment(subcomment)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Can't create sub-comment")
+			}
+
+			for k := 0; k < i%3; k++ {
+				authorID := userIDs[k%len(userIDs)]
+				body := strs[k%len(strs)]
+				subcomment := tabloid.NewComment(story.ID, sql.NullInt64{Int64: subcomment.ID, Valid: true}, body, authorID)
+				err := pg.InsertComment(subcomment)
+				if err != nil {
+					log.Fatal().Err(err).Msg("Can't create sub-sub-comment")
+				}
+			}
+		}
 	}
 }

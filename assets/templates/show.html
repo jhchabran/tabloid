@@ -15,7 +15,11 @@
       </div>
 
       <div class="col-12">
+        {{if .Session}}
         <input class="btn btn-primary" type="submit" value="Submit">
+        {{else}}
+        <input class="btn btn-primary" type="submit" value="Submit" disabled>
+        {{end}}
       </div>
     </form>
   </div>

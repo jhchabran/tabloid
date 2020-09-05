@@ -1,13 +1,17 @@
 {{define "comment_form"}}
 <div id="post-comment">
-	<form action="/stories/{{.StoryID}}/comments" method="post" id="submit-form" autocomplete="off">
-		<input type="hidden" name="parent-id" value="{{.ID}}">
+	<form action="/stories/{{.Comment.StoryID}}/comments" method="post" id="submit-form" autocomplete="off">
+		<input type="hidden" name="parent-id" value="{{.Comment.ID}}">
 		<div class="col-6 mb-3">
 			<textarea class="form-control" name="body" id="body" rows="4" required></textarea>
 		</div>
 
 		<div class="col-12">
-			<input class="btn btn-primary" type="submit" value="Submit">
+        {{if .Session}}
+        <input class="btn btn-primary" type="submit" value="Submit">
+        {{else}}
+        <input class="btn btn-primary" type="submit" value="Submit" disabled>
+        {{end}}
 		</div>
 	</form>
 </div>

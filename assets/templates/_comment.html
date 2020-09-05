@@ -21,7 +21,7 @@
 	<input class="trigger" id="{{.Comment.ID}}" type="checkbox">
 	<label class="story-meta text-secondary" for="{{.Comment.ID}}">Reply</label>
 	<div class="">
-		{{template "comment_form" .Comment}}
+		{{template "comment_form" dict "Comment" .Comment "Session" .Session}}
 	</div>
 
 	<ul class="comments">

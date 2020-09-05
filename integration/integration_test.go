@@ -200,6 +200,62 @@ func (suite *IntegrationTestSuite) TestAuthentication() {
 	require.True(t, strings.Contains(string(body), "fakeLogin"))
 }
 
+func (suite *IntegrationTestSuite) TestUnauthenticatedSubmitComment() {
+	t := suite.T()
+	client := &http.Client{}
+
+	// create a story to comment on
+	err := suite.pgStore.InsertStory(&tabloid.Story{
+		Title:     "Foobar",
+		URL:       "http://foobar.com",
+		Score:     1,
+		Body:      "Foobaring",
+		AuthorID:  suite.existingUserID,
+		CreatedAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	resp, err := client.Get(suite.testServer.URL + "/")
+	require.NoError(t, err)
+	if resp != nil {
+		require.Equal(t, 200, resp.StatusCode)
+	}
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// TODO rewrite this with GoQuery
+	// find the link to the story
+	storyRegexp := regexp.MustCompile(`(/stories/\d+/comments)`)
+	path := storyRegexp.FindString(string(body))
+	require.NotEmpty(t, path, "Story path was found empty")
+	storyUrl := suite.testServer.URL + path
+
+	// get that page
+	resp, err = client.Get(storyUrl)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	// submit button must be disabled
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	require.NoError(t, err)
+
+	_, ok := doc.Find("form#submit-form input.btn").Attr("disabled")
+	require.Truef(t, ok, "Submit form must be disabled")
+
+	// submit a comment anyway
+	values := url.Values{
+		"body":      []string{"very insightful comment"},
+		"parent-id": []string{""},
+	}
+
+	resp, err = client.PostForm(storyUrl, values)
+	require.Nil(t, err)
+	if resp != nil {
+		require.Equal(t, 401, resp.StatusCode)
+	}
+}
+
 func (suite *IntegrationTestSuite) TestSubmitComment() {
 	t := suite.T()
 
@@ -558,7 +614,7 @@ func (suite *IntegrationTestSuite) TestVotingOnComments() {
 	require.True(t, ok)
 	require.NotNil(t, action)
 
-	resp, err = client.PostForm(suite.testServer.URL + action, nil)
+	resp, err = client.PostForm(suite.testServer.URL+action, nil)
 	require.Nil(t, err)
 	if resp != nil {
 		require.Equal(t, 200, resp.StatusCode)
@@ -612,7 +668,7 @@ func (suite *IntegrationTestSuite) TestVotingOnComments() {
 	require.True(t, ok)
 	require.NotNil(t, action)
 
-	resp, err = client.PostForm(suite.testServer.URL + action, nil)
+	resp, err = client.PostForm(suite.testServer.URL+action, nil)
 	require.Nil(t, err)
 	if resp != nil {
 		require.Equal(t, 200, resp.StatusCode)

@@ -586,6 +586,19 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
+
+		data, err := s.CurrentUser(req)
+		if err != nil {
+			s.Logger.Warn().Err(err).Msg("Failuped to fetch Github user")
+			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
+			return
+		}
+		// redirect if unauthenticated
+		if data == nil {
+			http.Error(res, "Must be authenticated to submit comment", http.StatusUnauthorized)
+			return
+		}
+
 		id := params.ByName("id")
 		story, err := s.store.FindStory(id)
 		if err != nil {

@@ -46,16 +46,16 @@
             </ul>
             <ul class="navbar-nav mb-2 mb-lg-0">
               <li class="nav-item">
-                <a class="nav-link disabled text-warning" aria-current="page" aria-disabled="true" href="#">
+                <a id="session-login" class="nav-link disabled text-warning" aria-current="page" aria-disabled="true" href="#">
                   {{ .Session.Login }}
                 </a>
               </li>
               <li class="nav-item">
-                <a class="nav-link" aria-current="page" href="/oauth/destroy">Logout</a>
+                <a id="session-signout" class="nav-link" aria-current="page" href="/oauth/destroy">Logout</a>
               </li>
               {{else}}
               <li class="nav-item">
-                <a class="nav-link" aria-current="page" href="/oauth/start">Login</a>
+                <a id="session-signin" class="nav-link" aria-current="page" href="/oauth/start">Login</a>
               </li>
               {{end}}
             </ul>

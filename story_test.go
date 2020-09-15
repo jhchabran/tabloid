@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	qt "github.com/frankban/quicktest"
 )
 
 func TestOK(t *testing.T) {
-	r := require.New(t)
+	c := qt.New(t)
 
 	var story *Story
 	var userID int64 = 1
@@ -17,7 +17,7 @@ func TestOK(t *testing.T) {
 
 	withFakeNow(nowF, func() {
 		story = NewStory("foo", "body", userID, "http://foobar.com")
-		r.Equal(now, story.CreatedAt)
+		c.Assert(now, qt.Equals, story.CreatedAt)
 	})
 }
 

@@ -9,9 +9,9 @@
 </div>
 
 {{if gt (.PrevPage) (-1)}}
-<a href="/?page={{.PrevPage}}">Prev</a>
+<a class="pagination" href="/?page={{.PrevPage}}">Prev</a>
 {{end}}
 
-<a href="/?page={{.NextPage}}">Next</a>
+<a class="pagination" href="/?page={{.NextPage}}">Next</a>
 
 {{template "footer"}}

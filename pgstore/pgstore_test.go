@@ -1,46 +1,40 @@
 package pgstore
 
 import (
+	"database/sql"
+	"testing"
+
 	"github.com/jhchabran/tabloid"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
+
+	qt "github.com/frankban/quicktest"
 )
 
-type PGStoreTestSuite struct {
-	suite.Suite
-	pgStore *PGStore
-}
-
-func (suite *PGStoreTestSuite) SetupTest() {
-	suite.pgStore = New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
-	require.NoError(suite.T(), suite.pgStore.Connect())
-}
-
-func (suite *PGStoreTestSuite) TearDownTest() {
-	suite.pgStore.DB().MustExec("TRUNCATE TABLE stories;")
-	suite.pgStore.DB().MustExec("TRUNCATE TABLE comments;")
-	suite.pgStore.DB().MustExec("TRUNCATE TABLE users;")
-	suite.pgStore.DB().MustExec("TRUNCATE TABLE votes;")
-}
-
-func (suite *PGStoreTestSuite) TestInsertStory() {
-	r := require.New(suite.T())
+func TestPGStore(t *testing.T) {
+	c := qt.New(t)
 	store := New("user=postgres dbname=tabloid_test sslmode=disable password=postgres host=127.0.0.1")
-	r.NoError(store.Connect())
+	c.Assert(store.Connect(), qt.IsNil)
 
-	var userID int64 = 1
-	story := tabloid.NewStory("foo", "body", userID, "http://foobar.com")
-	err := store.InsertStory(story)
-	r.NoError(err)
-	r.NotZero(story.ID)
+	c.Run("InsertStory", func(c *qt.C) {
+		c.Cleanup(func() {
+			store.DB().MustExec("TRUNCATE TABLE stories;")
+			store.DB().MustExec("TRUNCATE TABLE comments;")
+			store.DB().MustExec("TRUNCATE TABLE users;")
+			store.DB().MustExec("TRUNCATE TABLE votes;")
+		})
 
-	vote := &tabloid.Vote{}
-	err = suite.pgStore.db.Get(&vote, "SELECT * FROM votes WHERE story_id = $1 AND user_id = 1 LIMIT 1", story.ID)
-	r.NoError(err)
+		var userID int64 = 1
+		story := tabloid.NewStory("foo", "body", userID, "http://foobar.com")
+		err := store.InsertStory(story)
+		c.Assert(err, qt.IsNil)
+		c.Assert(0, qt.Not(qt.Equals), story.ID)
 
-	r.Equal(userID, vote.UserID)
-	r.Equal(story.ID, vote.StoryID)
-	r.Truef(vote.Up, "vote must be up after creating a story")
+		vote := &tabloid.Vote{}
+		err = store.db.Get(vote, "SELECT * FROM votes WHERE story_id = $1 AND user_id = 1 LIMIT 1", story.ID)
 
-	r.Equal(story.Score, 1, "story must have its score field updated")
+		c.Assert(err, qt.IsNil)
+		c.Assert(vote.UserID, qt.Equals, userID)
+		c.Assert(vote.StoryID, qt.Equals, sql.NullInt64{Int64: story.ID, Valid: true})
+		c.Assert(vote.Up, qt.IsTrue, qt.Commentf("vote must be up when creating a story"))
+		c.Assert(story.Score, qt.Equals, int64(1), qt.Commentf("story must have its score field updated"))
+	})
 }

@@ -4,16 +4,20 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	qt "github.com/frankban/quicktest"
 )
 
 func TestNewCommentOK(t *testing.T) {
+	c := qt.New(t)
+
 	comment := NewComment(1, sql.NullInt64{Int64: 1, Valid: true}, "body", 1)
-	require.Equal(t, int64(1), comment.ParentCommentID.Int64)
-	require.True(t, comment.ParentCommentID.Valid)
+	c.Assert(int64(1), qt.Equals, comment.ParentCommentID.Int64)
+	c.Assert(comment.ParentCommentID.Valid, qt.IsTrue)
 }
 
 func TestNewCommentPresentersTree(t *testing.T) {
+	c := qt.New(t)
+
 	authorID := int64(42)
 	nilParent := sql.NullInt64{Int64: 0, Valid: false}
 	a := NewComment(1, nilParent, "body", authorID)
@@ -46,12 +50,18 @@ func TestNewCommentPresentersTree(t *testing.T) {
 
 	ps := NewCommentPresentersTree(comments)
 
-	require.Equal(t, int64(1), ps[0].ID)
-	require.Equal(t, int64(2), ps[0].Children[0].ID)
-	require.Equal(t, int64(3), ps[0].Children[1].ID)
-	require.Equal(t, int64(4), ps[0].Children[2].ID)
-	require.Equal(t, int64(5), ps[0].Children[1].Children[0].ID)
-	require.Equal(t, int64(6), ps[0].Children[1].Children[1].ID)
-	require.Equal(t, int64(7), ps[1].ID)
-	require.Equal(t, int64(8), ps[1].Children[0].ID)
+	tests := map[int]int64{
+		1: ps[0].ID,
+		2: ps[0].Children[0].ID,
+		3: ps[0].Children[1].ID,
+		4: ps[0].Children[2].ID,
+		5: ps[0].Children[1].Children[0].ID,
+		6: ps[0].Children[1].Children[1].ID,
+		7: ps[1].ID,
+		8: ps[1].Children[0].ID,
+	}
+
+	for want, input := range tests {
+		c.Assert(int64(want), qt.Equals, input)
+	}
 }

@@ -15,9 +15,13 @@
 	<a href="/oauth/start" class="voters-inactive"><img src="/static/grayarrow2x.gif" /></a>
 	{{end}}
 	<span class="comment-meta text-secondary">
+	{{if ne .Comment.Score 1}}
 		{{.Comment.Author}}, {{.Comment.Score}} points, {{.Comment.CreatedAt | daysAgo}}
+	{{else}}
+		{{.Comment.Author}}, {{.Comment.Score}} point, {{.Comment.CreatedAt | daysAgo}}
+	{{end}}
 	</span>
-	<p class="mb-0" >{{.Comment.Body}}</p>
+	<p class="comment-body mb-0" >{{.Comment.Body}}</p>
 	<input class="trigger" id="{{.Comment.ID}}" type="checkbox">
 	<label class="story-meta text-secondary" for="{{.Comment.ID}}">Reply</label>
 	<div class="">

@@ -8,7 +8,7 @@
 
 <div class="row pl-2 pb-2">
   <div class="col-md-6">
-    <form class="" action="/stories/{{.Story.ID}}/comments" method="post" id="submit-form" autocomplete="off">
+    <form class="new-comment-form" action="/stories/{{.Story.ID}}/comments" method="post" id="submit-form" autocomplete="off">
       <div class="col-12 mb-3">
         <input type="hidden" name="parent-id" value="">
         <textarea class="form-control" name="body" id="body" rows="4" required></textarea>

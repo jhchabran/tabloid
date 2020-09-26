@@ -344,6 +344,7 @@ func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.R
 		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
 		return
 	}
+	s.Logger.Warn().Int("len", len(stories)).Msg("stories")
 
 	storyPresenters := []*storyPresenter{}
 	for i, st := range stories {
@@ -537,9 +538,9 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
 			return
 		}
-		// redirect if unauthenticated
+
 		if data == nil {
-			http.Redirect(res, req, "/", http.StatusFound)
+			http.Error(res, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -550,10 +551,29 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		// handle form
-		title := req.Form["title"][0]
-		body := strings.TrimSpace(req.Form["body"][0])
-		url := req.Form["url"][0]
+		var title, body, url string
+		// can't submit without a title
+		if len(req.Form["title"]) > 0 {
+			title = req.Form["title"][0]
+		}
+
+		if len(req.Form["body"]) > 0 {
+			body = strings.TrimSpace(req.Form["body"][0])
+		}
+
+		if len(req.Form["url"]) > 0 {
+			url = req.Form["url"][0]
+		}
+
+		if title == "" {
+			http.Error(res, "", http.StatusBadRequest)
+			return
+		}
+
+		if url == "" && body == "" {
+			http.Error(res, "", http.StatusBadRequest)
+			return
+		}
 
 		// grab author stuff
 		userSession, err := s.authService.CurrentUser(req)
@@ -579,7 +599,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		http.Redirect(res, req, "/", http.StatusFound)
+		http.Redirect(res, req, "/stories/"+strconv.Itoa(int(story.ID)), http.StatusCreated)
 	}
 }
 

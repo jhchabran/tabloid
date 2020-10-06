@@ -77,7 +77,7 @@ func main() {
 
 	var userIDs []int64
 	for _, u := range users {
-		err := pg.CreateOrUpdateUser(u, u+"@gmail.com")
+		_, err := pg.CreateOrUpdateUser(u, u+"@gmail.com")
 		if err != nil {
 			log.Fatal().Err(err).Msg("Can't create user")
 		}

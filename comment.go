@@ -21,7 +21,7 @@ func (c *Comment) GetParentCommentID() sql.NullInt64 { return c.ParentCommentID 
 
 type CommentSeenByUser struct {
 	Comment
-	UserId int64        `db:"user_id"`
+	UserID int64        `db:"user_id"`
 	Up     sql.NullBool `db:"up"`
 }
 

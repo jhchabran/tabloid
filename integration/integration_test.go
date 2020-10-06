@@ -193,11 +193,7 @@ func TestSubmitStory(t *testing.T) {
 		resp, err := client.PostForm(tc.url("/submit"), values)
 		c.Assert(err, qt.IsNil)
 		defer resp.Body.Close()
-		c.Assert(resp.StatusCode, qt.Equals, 201)
-
-		loc, err := resp.Location()
-		c.Assert(err, qt.IsNil)
-		c.Assert(loc.Path, qt.Contains, "/stories/")
+		c.Assert(resp.StatusCode, qt.Equals, 200)
 	})
 
 	c.Run("submit with a link, a body and a title", func(c *qt.C) {
@@ -213,11 +209,7 @@ func TestSubmitStory(t *testing.T) {
 		resp, err := client.PostForm(tc.url("/submit"), values)
 		c.Assert(err, qt.IsNil)
 		defer resp.Body.Close()
-		c.Assert(resp.StatusCode, qt.Equals, 201)
-
-		loc, err := resp.Location()
-		c.Assert(err, qt.IsNil)
-		c.Assert(loc.Path, qt.Contains, "/stories/")
+		c.Assert(resp.StatusCode, qt.Equals, 200)
 	})
 
 	c.Run("submit without a link,but with a body and a title", func(c *qt.C) {
@@ -232,11 +224,7 @@ func TestSubmitStory(t *testing.T) {
 		resp, err := client.PostForm(tc.url("/submit"), values)
 		c.Assert(err, qt.IsNil)
 		defer resp.Body.Close()
-		c.Assert(resp.StatusCode, qt.Equals, 201)
-
-		loc, err := resp.Location()
-		c.Assert(err, qt.IsNil)
-		c.Assert(loc.Path, qt.Contains, "/stories/")
+		c.Assert(resp.StatusCode, qt.Equals, 200)
 	})
 
 	c.Run("cannot submit without a link but with a title", func(c *qt.C) {

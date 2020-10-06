@@ -136,8 +136,9 @@ func (s *PGStore) ListCommentsWithVotes(storyID string, userID int64) ([]*tabloi
 		FROM comments
 		JOIN users ON comments.author_id = users.id
 		LEFT JOIN votes ON comments.id = votes.comment_id AND votes.user_id = $1
+		WHERE comments.story_id = $2
 		ORDER BY created_at`,
-		userID)
+		userID, storyID)
 	if err != nil {
 		return nil, err
 	}
@@ -208,15 +209,17 @@ func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
 	return &user, nil
 }
 
-func (s *PGStore) CreateOrUpdateUser(login string, email string) error {
+func (s *PGStore) CreateOrUpdateUser(login string, email string) (int64, error) {
 	now := time.Now()
-	_, err := s.db.Exec("INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5", login, email, now, now, now)
+
+	var id int64
+	err := s.db.Get(&id, "INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5 RETURNING id", login, email, now, now, now)
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return id, nil
 }
 
 func (s *PGStore) CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool) error {

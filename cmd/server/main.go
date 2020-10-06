@@ -17,7 +17,6 @@ func main() {
 		log.Fatal().Err(err).Msg("Cannot read configuration")
 	}
 	logger := cmd.SetupLogger(cfg)
-	logger.Info().Msg("Seeding database")
 
 	// setup database
 	pgcfg := fmt.Sprintf(

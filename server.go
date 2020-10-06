@@ -188,7 +188,8 @@ func (s *Server) HandleOAuthCallback() httprouter.Handle {
 		// need to think about error handling here
 		// probably a before write callback is good enough?
 		s.authService.Callback(res, req, func(u *authentication.User) error {
-			return s.store.CreateOrUpdateUser(u.Login, "email")
+			_, err := s.store.CreateOrUpdateUser(u.Login, "email")
+			return err
 		})
 	}
 }
@@ -599,7 +600,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		http.Redirect(res, req, "/stories/"+strconv.Itoa(int(story.ID)), http.StatusCreated)
+		http.Redirect(res, req, "/stories/"+strconv.Itoa(int(story.ID))+"/comments", http.StatusFound)
 	}
 }
 

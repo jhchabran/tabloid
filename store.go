@@ -11,7 +11,7 @@ type Store interface {
 	ListCommentsWithVotes(storyID string, userID int64) ([]*CommentSeenByUser, error)
 	InsertComment(comment *Comment) error
 	FindUserByLogin(login string) (*User, error)
-	CreateOrUpdateUser(login string, email string) error
+	CreateOrUpdateUser(login string, email string) (int64, error)
 	CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool) error
 	CreateOrUpdateVoteOnComment(storyID int64, userID int64, up bool) error
 }

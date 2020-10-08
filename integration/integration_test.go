@@ -557,6 +557,33 @@ func TestCommentsSubmiting(t *testing.T) {
 		c.Assert(doc.Find(".comment-body").Text(), qt.Contains, "colorful comment")
 		c.Assert(doc.Find(".comment-meta").Text(), qt.Contains, "fakeLogin1, 1 point, today")
 	})
+
+	c.Run("submitted comments are trimmed from whitespaces", func(c *qt.C) {
+		resp, err := client.Get(tc.url(storyPath))
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		action, ok := doc.Find("form.new-comment-form").First().Attr("action")
+		c.Assert(ok, qt.IsTrue)
+
+		values := url.Values{
+			"body":      []string{"very insightful \ncomment           \n                          "},
+			"parent-id": []string{""},
+		}
+
+		resp, err = client.PostForm(tc.url(action), values)
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(doc.Find(".comment-body").Text(), qt.Contains, "very insightful comment")
+	})
+
 }
 
 func TestCommentsVoting(t *testing.T) {

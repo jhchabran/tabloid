@@ -254,6 +254,27 @@ func TestSubmitStory(t *testing.T) {
 		defer resp.Body.Close()
 		c.Assert(resp.StatusCode, qt.Equals, 400)
 	})
+
+	c.Run("trim spaces on title when submitting a story", func(c *qt.C) {
+		tc := newTestContext(c)
+		tc.prepareServer()
+
+		client := tc.newAuthenticatedClient()
+		values := url.Values{
+			"title": []string{"Foo      "},
+			"url":   []string{"http://foobar"},
+		}
+
+		resp, err := client.PostForm(tc.url("/submit"), values)
+		c.Assert(err, qt.IsNil)
+		defer resp.Body.Close()
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+		title := doc.Find("a.story-title").Text()
+		c.Assert(title, qt.Equals, "Foo")
+	})
 }
 
 func TestAuthentication(t *testing.T) {

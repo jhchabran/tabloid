@@ -1,5 +1,5 @@
 {{define "story_comments"}}
-<a class="pl-2" href="{{.URL}}">{{.Title | title }}</a>
+<a class="pl-2 story-title" href="{{.URL}}">{{.Title | title }}</a>
 <br/>
 <span class="story-meta text-secondary pl-2">
   {{.Score}} by {{.Author}}, {{.CreatedAt | daysAgo}}

@@ -555,7 +555,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		var title, body, url string
 		// can't submit without a title
 		if len(req.Form["title"]) > 0 {
-			title = req.Form["title"][0]
+			title = strings.TrimSpace(req.Form["title"][0])
 		}
 
 		if len(req.Form["body"]) > 0 {

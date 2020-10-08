@@ -572,7 +572,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			}
 		}
 
-		if title == "" {
+		if title == "" || len(title) > 64 {
 			http.Error(res, "", http.StatusBadRequest)
 			return
 		}

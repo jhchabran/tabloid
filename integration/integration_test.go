@@ -181,6 +181,26 @@ func TestSubmitStory(t *testing.T) {
 		c.Assert(resp.StatusCode, qt.Equals, 401)
 	})
 
+	c.Run("cannot submit with a link and a really long title", func(c *qt.C) {
+		tc := newTestContext(c)
+		tc.prepareServer()
+
+		b := make([]byte, 64+1)
+		for i := 0; i < 64+1; i++ {
+			b[i] = 'a'
+		}
+
+		client := tc.newAuthenticatedClient()
+		values := url.Values{
+			"title": []string{string(b)},
+			"url":   []string{"http://duckduckgo.com"},
+		}
+		resp, err := client.PostForm(tc.url("/submit"), values)
+		c.Assert(err, qt.IsNil)
+		defer resp.Body.Close()
+		c.Assert(resp.StatusCode, qt.Equals, 400)
+	})
+
 	c.Run("submit with a link and a title", func(c *qt.C) {
 		tc := newTestContext(c)
 		tc.prepareServer()

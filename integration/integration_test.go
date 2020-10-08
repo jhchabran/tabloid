@@ -275,6 +275,79 @@ func TestSubmitStory(t *testing.T) {
 		title := doc.Find("a.story-title").Text()
 		c.Assert(title, qt.Equals, "Foo")
 	})
+
+	c.Run("trim spaces on url when submitting a story", func(c *qt.C) {
+		tc := newTestContext(c)
+		tc.prepareServer()
+
+		client := tc.newAuthenticatedClient()
+		values := url.Values{
+			"title": []string{"Foo"},
+			"url":   []string{"http://foobar.com/         "},
+		}
+
+		resp, err := client.PostForm(tc.url("/submit"), values)
+		c.Assert(err, qt.IsNil)
+		defer resp.Body.Close()
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+		href := doc.Find("a.story-title").AttrOr("href", "")
+		c.Assert(href, qt.Equals, "http://foobar.com/")
+	})
+
+	c.Run("trim spaces on body when submitting a story", func(c *qt.C) {
+		tc := newTestContext(c)
+		tc.prepareServer()
+
+		client := tc.newAuthenticatedClient()
+		values := url.Values{
+			"title": []string{"Foo"},
+			"url":   []string{"http://foobar.com/"},
+			"body":  []string{"space\nnow      \n\n     "},
+		}
+
+		resp, err := client.PostForm(tc.url("/submit"), values)
+		c.Assert(err, qt.IsNil)
+		defer resp.Body.Close()
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+		body := doc.Find("p.story-body").Text()
+		c.Assert(body, qt.Equals, "space\nnow")
+	})
+
+	c.Run("reject an invalid url when submitting a story", func(c *qt.C) {
+		tests := []struct {
+			url    string
+			status int
+		}{
+			{"httpfoobar.com/", 400},
+			{"httpfoobar", 400},
+			{"ftp://foobar-com/", 400},
+			{"http://foobar.com/", 200},
+			{"https://foobar.com/", 200},
+		}
+
+		tc := newTestContext(c)
+		tc.prepareServer()
+		client := tc.newAuthenticatedClient()
+
+		for _, test := range tests {
+			values := url.Values{
+				"title": []string{"Foo"},
+				"url":   []string{test.url},
+			}
+
+			resp, err := client.PostForm(tc.url("/submit"), values)
+			c.Assert(err, qt.IsNil, qt.Commentf("url=%v", test.url))
+			defer resp.Body.Close()
+			c.Assert(resp.StatusCode, qt.Equals, test.status, qt.Commentf("url=%v", test.url))
+		}
+	})
+
 }
 
 func TestAuthentication(t *testing.T) {

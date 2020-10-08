@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -552,10 +553,10 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		var title, body, url string
+		var title, body, url_ string
 		// can't submit without a title
 		if len(req.Form["title"]) > 0 {
-			title = req.Form["title"][0]
+			title = strings.TrimSpace(req.Form["title"][0])
 		}
 
 		if len(req.Form["body"]) > 0 {
@@ -563,15 +564,20 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		}
 
 		if len(req.Form["url"]) > 0 {
-			url = req.Form["url"][0]
+			url_ = strings.TrimSpace(req.Form["url"][0])
+			u, err := url.Parse(url_)
+			if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+				http.Error(res, "", http.StatusBadRequest)
+				return
+			}
 		}
 
-		if title == "" {
+		if title == "" || len(title) > 64 {
 			http.Error(res, "", http.StatusBadRequest)
 			return
 		}
 
-		if url == "" && body == "" {
+		if url_ == "" && body == "" {
 			http.Error(res, "", http.StatusBadRequest)
 			return
 		}
@@ -591,7 +597,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		story := NewStory(title, body, userRecord.ID, url)
+		story := NewStory(title, body, userRecord.ID, url_)
 
 		err = s.store.InsertStory(story)
 		if err != nil {

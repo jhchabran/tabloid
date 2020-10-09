@@ -12,6 +12,8 @@
 <a class="pagination" href="/?page={{.PrevPage}}">Prev</a>
 {{end}}
 
+{{if gt (.NextPage) (-1)}}
 <a class="pagination" href="/?page={{.NextPage}}">Next</a>
+{{end}}
 
 {{template "footer"}}

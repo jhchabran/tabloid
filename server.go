@@ -318,6 +318,18 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 		"CurrPage": page,
 	}
 
+	// HACK, not very elegant but does the job
+	nextPageStories, err := s.store.ListStories(page+1, s.config.StoriesPerPage)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to list stories")
+		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
+		return
+	}
+	s.Logger.Warn().Msgf("len=%v", len(nextPageStories))
+	if len(nextPageStories) == 0 {
+		vars["NextPage"] = -1
+	}
+
 	err = tmpl.Execute(res, vars)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to render template")
@@ -346,7 +358,6 @@ func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.R
 		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
 		return
 	}
-	s.Logger.Warn().Int("len", len(stories)).Msg("stories")
 
 	storyPresenters := []*storyPresenter{}
 	for i, st := range stories {
@@ -359,6 +370,18 @@ func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.R
 		"Session":  nil,
 		"NextPage": page + 1,
 		"PrevPage": page - 1,
+	}
+
+	// HACK, not very elegant but does the job
+	nextPageStories, err := s.store.ListStories(page+1, s.config.StoriesPerPage)
+	if err != nil {
+		s.Logger.Error().Err(err).Msg("Failed to list stories")
+		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
+		return
+	}
+
+	if len(nextPageStories) == 0 {
+		vars["NextPage"] = -1
 	}
 
 	err = tmpl.Execute(res, vars)

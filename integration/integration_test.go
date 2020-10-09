@@ -56,7 +56,7 @@ func TestIndexPage(t *testing.T) {
 		c.Assert(text, qt.Equals, "Foobar")
 	})
 
-	// 20 items, 3 per page
+	// 7 items, 3 per page
 	c.Run("OK pagination", func(c *qt.C) {
 		tc := newTestContext(c)
 		tc.prepareServer()
@@ -64,7 +64,7 @@ func TestIndexPage(t *testing.T) {
 		id, err := tc.createUser("alpha")
 		c.Assert(err, qt.IsNil)
 
-		for i := 0; i < 20; i++ {
+		for i := 0; i < 7; i++ {
 			ii := strconv.Itoa(i)
 			err := tc.pgStore.InsertStory(&tabloid.Story{
 				Title:     "Foobar" + ii,
@@ -140,7 +140,40 @@ func TestIndexPage(t *testing.T) {
 			c.Assert(link.AttrOr("href", ""), qt.Equals, "/?page=0")
 		})
 
-		// c.Run("no next link on the last page", func(c *qt.C) {})
+		c.Run("no next link on the last page", func(c *qt.C) {
+			// go to the second page
+			link := doc.Find("a.pagination")
+			href, ok := link.Attr("href")
+			c.Assert(ok, qt.IsTrue)
+
+			resp, err := client.Get(tc.url(href))
+			c.Assert(err, qt.IsNil)
+			defer resp.Body.Close()
+
+			// read the dom
+			ddoc, err := goquery.NewDocumentFromReader(resp.Body)
+			c.Assert(err, qt.IsNil)
+
+			// go to the third page
+			link = ddoc.Find("a.pagination").Last()
+			href, ok = link.Attr("href")
+			c.Assert(ok, qt.IsTrue)
+
+			resp, err = client.Get(tc.url(href))
+			c.Assert(err, qt.IsNil)
+			defer resp.Body.Close()
+
+			// read the dom
+			ddoc, err = goquery.NewDocumentFromReader(resp.Body)
+			c.Assert(err, qt.IsNil)
+
+			// there should be two pagination links and we want the first one, Prev
+			link = ddoc.Find("a.pagination").First()
+			c.Assert(link.Text(), qt.Equals, "Prev")
+			c.Assert(link.AttrOr("href", ""), qt.Equals, "/?page=1")
+			count := ddoc.Find("a.pagination").Length()
+			c.Assert(count, qt.Equals, 1)
+		})
 	})
 }
 

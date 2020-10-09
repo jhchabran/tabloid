@@ -3,7 +3,7 @@ RUN apk --no-cache add gcc g++ make git curl
 WORKDIR /go/src/app
 COPY . .
 RUN go get ./...
-RUN GOOS=linux go build -ldflags="-s -w" -o ./bin/tabloid ./cmd/main.go
+RUN GOOS=linux go build -ldflags="-s -w" -o ./bin/tabloid ./cmd/server/main.go
 RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.11.0/migrate.linux-amd64.tar.gz | tar xvz
 
 FROM alpine:3.12

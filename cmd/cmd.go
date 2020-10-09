@@ -43,9 +43,12 @@ func (c *Config) Load() error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	err = json.NewDecoder(f).Decode(c)
-	if err != nil {
-		return err
+
+	if !os.IsNotExist(err) {
+		err = json.NewDecoder(f).Decode(c)
+		if err != nil {
+			return err
+		}
 	}
 
 	v := os.Getenv("LOG_LEVEL")

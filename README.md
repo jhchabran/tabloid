@@ -10,7 +10,7 @@ communities, such as the internal newsboard for a company or a community.
 
 Communities using Tabloid may come from different software backgrounds, which explains why Tabloid isn't using any kind of framework. Everybody should be able to contribute and frameworks are usually getting in the way when it comes to add that little feature that would makes sense in your context.
 
-Not relying on any framework makes the code a bit more resiliant to time. Nobody likes to hack around outdated frameworks and the feature-set is small enough to deal with it without it. Yes it's boring, yes it could be written in less than n lines with X but the idea is that the code is almost self-contained. Not knowing too much about Go shouldn't be an entry barrier.
+Not relying on any framework makes the code a bit more resiliant to time. Nobody likes to hack around outdated frameworks and the feature-set is small enough to deal with it without it. It's lacking the usual abstactions for such an app and yes it could be written in less than n lines with library X but the idea is that the code is almost self-contained. Not knowing too much about Go shouldn't be an entry barrier.
 
 Similarly, the front-end code aims to be as simple as possible. Pure HTML isn't fancy but it does the job enough for this kind of app. And it's an interesting constraint, at least to me.
 

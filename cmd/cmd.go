@@ -23,6 +23,7 @@ type Config struct {
 	ServerSecret       string `json:"server_secret,required"`
 	StoriesPerPage     int    `json:"stories_per_page"`
 	Addr               string `json:"addr"`
+	RootURL            string `json:"root_url"`
 }
 
 func DefaultConfig() *Config {
@@ -35,6 +36,7 @@ func DefaultConfig() *Config {
 		DatabaseHost:     "127.0.0.1",
 		StoriesPerPage:   10,
 		Addr:             "localhost:8080",
+		RootURL:          "http://localhost:8080",
 	}
 }
 

@@ -834,3 +834,76 @@ func TestCommentsVoting(t *testing.T) {
 		c.Assert(doc.Find("span.comment-meta").Text(), qt.Contains, "alpha, 3 points, today")
 	})
 }
+
+func TestHooks(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("Submitting a story runs the story hooks", func(c *qt.C) {
+		tc := newTestContext(c)
+		seen := false
+		tc.server.AddStoryHook(func(story *tabloid.Story) error {
+			seen = true
+			return nil
+		})
+		tc.prepareServer()
+
+		client := tc.newAuthenticatedClient()
+		values := url.Values{
+			"title": []string{"Captain Nemo"},
+			"url":   []string{"http://duckduckgo.com"},
+		}
+		resp, err := client.PostForm(tc.url("/submit"), values)
+		c.Assert(err, qt.IsNil)
+		defer resp.Body.Close()
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		c.Assert(seen, qt.IsTrue)
+	})
+
+	c.Run("Submitting a comment runs the comment hooks", func(c *qt.C) {
+		tc := newTestContext(c)
+		seen := false
+		tc.server.AddCommentHook(func(story *tabloid.Story, comment *tabloid.Comment) error {
+			seen = true
+			return nil
+		})
+		tc.prepareServer()
+
+		id, err := tc.createUser("alpha")
+		c.Assert(err, qt.IsNil)
+
+		// create a story to comment on
+		story := &tabloid.Story{
+			Title:     "Foobar",
+			URL:       "http://foobar.com",
+			Body:      "Foobaring",
+			AuthorID:  id,
+			CreatedAt: tabloid.NowFunc(),
+		}
+		err = tc.pgStore.InsertStory(story)
+		c.Assert(err, qt.IsNil)
+
+		client := tc.newAuthenticatedClient()
+		resp, err := client.Get(tc.url("/stories/" + strconv.Itoa(int(story.ID)) + "/comments"))
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		action, ok := doc.Find("form.new-comment-form").First().Attr("action")
+		c.Assert(ok, qt.IsTrue)
+
+		values := url.Values{
+			"body":      []string{"very insightful comment"},
+			"parent-id": []string{""},
+		}
+
+		resp, err = client.PostForm(tc.url(action), values)
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		c.Assert(seen, qt.IsTrue)
+	})
+}

@@ -59,6 +59,8 @@ var helpers template.FuncMap = template.FuncMap{
 }
 
 type middleware func(http.Handler) http.Handler
+type StoryHookFn func(*Story) error
+type CommentHookFn func(*Story, *Comment) error
 
 type Server struct {
 	Logger          zerolog.Logger
@@ -72,6 +74,8 @@ type Server struct {
 	rootHandler     http.Handler
 	done            chan struct{}
 	idleConnsClosed chan struct{}
+	storyHooks      []StoryHookFn
+	commentHooks    []CommentHookFn
 }
 
 type ServerConfig struct {
@@ -576,18 +580,10 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		var title, body, url_ string
-		// can't submit without a title
-		if len(req.Form["title"]) > 0 {
-			title = strings.TrimSpace(req.Form["title"][0])
-		}
-
-		if len(req.Form["body"]) > 0 {
-			body = strings.TrimSpace(req.Form["body"][0])
-		}
-
-		if len(req.Form["url"]) > 0 {
-			url_ = strings.TrimSpace(req.Form["url"][0])
+		title := strings.TrimSpace(req.FormValue("title"))
+		body := strings.TrimSpace(req.FormValue("body"))
+		url_ := strings.TrimSpace(req.FormValue("url"))
+		if url_ != "" {
 			u, err := url.Parse(url_)
 			if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 				http.Error(res, "", http.StatusBadRequest)
@@ -627,6 +623,17 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			s.Logger.Error().Err(err).Msg("Failed to insert story")
 			http.Error(res, "Cannot insert story", http.StatusMethodNotAllowed)
 			return
+		}
+
+		story.Author = userSession.Login
+
+		// HACK
+		for _, h := range s.storyHooks {
+			err := h(story)
+			if err != nil {
+				http.Error(res, "hook failed", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		http.Redirect(res, req, "/stories/"+strconv.Itoa(int(story.ID))+"/comments", http.StatusFound)
@@ -680,8 +687,8 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		}
 
 		var comment *Comment
-		body := strings.TrimSpace(req.Form["body"][0])
-		_parentCommentID := req.Form["parent-id"][0]
+		body := strings.TrimSpace(req.FormValue("body"))
+		_parentCommentID := req.FormValue("parent-id")
 
 		// if not top-level comment
 		if _parentCommentID != "" {
@@ -701,6 +708,16 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 			s.Logger.Error().Err(err).Msg("Failed to insert comment")
 			http.Error(res, "Failed to insert comment", http.StatusMethodNotAllowed)
 			return
+		}
+
+		// HACK
+		comment.Author = userSession.Login
+		for _, h := range s.commentHooks {
+			err := h(story, comment)
+			if err != nil {
+				http.Error(res, "hook failed", http.StatusInternalServerError)
+				return
+			}
 		}
 
 		storyPath := fmt.Sprintf("/stories/%v/comments", story.ID)
@@ -843,4 +860,12 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 		http.Redirect(res, req, redir, http.StatusFound)
 		return
 	}
+}
+
+func (s *Server) AddStoryHook(fn StoryHookFn) {
+	s.storyHooks = append(s.storyHooks, fn)
+}
+
+func (s *Server) AddCommentHook(fn CommentHookFn) {
+	s.commentHooks = append(s.commentHooks, fn)
 }

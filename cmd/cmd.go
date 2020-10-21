@@ -113,6 +113,11 @@ func (c *Config) Load() error {
 		c.Addr = v
 	}
 
+	v = os.Getenv("ROOT_URL")
+	if v != "" {
+		c.RootURL = v
+	}
+
 	if c.ServerSecret == "" {
 		return fmt.Errorf("missing config 'server secret'")
 	}

@@ -6,39 +6,39 @@ import (
 )
 
 type Comment struct {
-	ID              int64         `db:"id"`
-	ParentCommentID sql.NullInt64 `db:"parent_comment_id"`
-	StoryID         int64         `db:"story_id"`
-	Body            string        `db:"body"`
-	Score           int64         `db:"score"`
-	AuthorID        int64         `db:"author_id"`
-	Author          string        `db:"author"`
-	CreatedAt       time.Time     `db:"created_at"`
+	ID              string         `db:"id"`
+	ParentCommentID sql.NullString `db:"parent_comment_id"`
+	StoryID         string         `db:"story_id"`
+	Body            string         `db:"body"`
+	Score           int64          `db:"score"`
+	AuthorID        string         `db:"author_id"`
+	Author          string         `db:"author"`
+	CreatedAt       time.Time      `db:"created_at"`
 }
 
-func (c *Comment) GetID() int64                      { return c.ID }
-func (c *Comment) GetParentCommentID() sql.NullInt64 { return c.ParentCommentID }
+func (c *Comment) GetID() string                      { return c.ID }
+func (c *Comment) GetParentCommentID() sql.NullString { return c.ParentCommentID }
 
 type CommentSeenByUser struct {
 	Comment
-	UserID int64        `db:"user_id"`
+	UserID string       `db:"user_id"`
 	Up     sql.NullBool `db:"up"`
 }
 
-func (c *CommentSeenByUser) GetID() int64                      { return c.ID }
-func (c *CommentSeenByUser) GetParentCommentID() sql.NullInt64 { return c.ParentCommentID }
+func (c *CommentSeenByUser) GetID() string                      { return c.ID }
+func (c *CommentSeenByUser) GetParentCommentID() sql.NullString { return c.ParentCommentID }
 
 // TODO we should probably refactor these structs, their name are unclear
 // for now, it'll do the job.
 type CommentAccessor interface {
-	GetID() int64
-	GetParentCommentID() sql.NullInt64
+	GetID() string
+	GetParentCommentID() sql.NullString
 }
 
 // TODO move this in a better place
 type CommentPresenter struct {
-	ID         int64
-	StoryID    int64
+	ID         string
+	StoryID    string
 	Path       string
 	ParentPath string
 	StoryPath  string
@@ -58,13 +58,13 @@ type CommentNode struct {
 
 // TODO ordering?
 func NewCommentPresentersTree(comments []CommentAccessor) []*CommentPresenter {
-	index := map[sql.NullInt64]*CommentNode{}
+	index := map[sql.NullString]*CommentNode{}
 	var roots []*CommentNode
 
 	for _, c := range comments {
 		// create the node
 		var node *CommentNode
-		id := sql.NullInt64{Int64: c.GetID(), Valid: true}
+		id := sql.NullString{String: c.GetID(), Valid: true}
 		if _, ok := index[id]; !ok {
 			index[id] = &CommentNode{
 				Children: []*CommentNode{},
@@ -100,7 +100,7 @@ func NewCommentPresentersTree(comments []CommentAccessor) []*CommentPresenter {
 	return result
 }
 
-func NewComment(storyID int64, parentCommentID sql.NullInt64, body string, authorID int64) *Comment {
+func NewComment(storyID string, parentCommentID sql.NullString, body string, authorID string) *Comment {
 	return &Comment{
 		ParentCommentID: parentCommentID,
 		StoryID:         storyID,

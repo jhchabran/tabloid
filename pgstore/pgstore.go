@@ -50,7 +50,7 @@ func (s *PGStore) ListStories(page int, perPage int) ([]*tabloid.Story, error) {
 	return stories, nil
 }
 
-func (s *PGStore) ListStoriesWithVotes(userID int64, page int, perPage int) ([]*tabloid.StorySeenByUser, error) {
+func (s *PGStore) ListStoriesWithVotes(userID string, page int, perPage int) ([]*tabloid.StorySeenByUser, error) {
 	stories := []*tabloid.StorySeenByUser{}
 	err := s.db.Select(&stories,
 		`SELECT stories.*, users.name as author, users.id as user_id, votes.up as up
@@ -77,7 +77,7 @@ func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 }
 
 func (s *PGStore) InsertStory(story *tabloid.Story) error {
-	var id int64
+	var id string
 	now := tabloid.NowFunc()
 	tx, err := s.db.Beginx()
 	if err != nil {
@@ -129,7 +129,7 @@ func (s *PGStore) ListComments(storyID string) ([]*tabloid.Comment, error) {
 	return comments, nil
 }
 
-func (s *PGStore) ListCommentsWithVotes(storyID string, userID int64) ([]*tabloid.CommentSeenByUser, error) {
+func (s *PGStore) ListCommentsWithVotes(storyID string, userID string) ([]*tabloid.CommentSeenByUser, error) {
 	comments := []*tabloid.CommentSeenByUser{}
 	err := s.db.Select(&comments,
 		`SELECT comments.*, users.name as author, users.id as user_id, votes.up as up
@@ -157,7 +157,7 @@ func (s *PGStore) FindComment(ID string) (*tabloid.Comment, error) {
 }
 
 func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
-	var id int64
+	var id string
 	now := tabloid.NowFunc()
 	tx, err := s.db.Beginx()
 	if err != nil {
@@ -209,20 +209,20 @@ func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
 	return &user, nil
 }
 
-func (s *PGStore) CreateOrUpdateUser(login string, email string) (int64, error) {
+func (s *PGStore) CreateOrUpdateUser(login string, email string) (string, error) {
 	now := time.Now()
 
-	var id int64
+	var id string
 	err := s.db.Get(&id, "INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) ON CONFlICT (name) DO UPDATE SET last_login_at = $5 RETURNING id", login, email, now, now, now)
 
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
 	return id, nil
 }
 
-func (s *PGStore) CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool) error {
+func (s *PGStore) CreateOrUpdateVoteOnStory(storyID string, userID string, up bool) error {
 	now := time.Now()
 	_, err := s.db.Exec("INSERT INTO votes (story_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, story_id) WHERE comment_id IS NULL DO UPDATE SET up = $5",
 		storyID, userID, up, now, up)
@@ -234,7 +234,7 @@ func (s *PGStore) CreateOrUpdateVoteOnStory(storyID int64, userID int64, up bool
 	return nil
 }
 
-func (s *PGStore) CreateOrUpdateVoteOnComment(commentID int64, userID int64, up bool) error {
+func (s *PGStore) CreateOrUpdateVoteOnComment(commentID string, userID string, up bool) error {
 	now := time.Now()
 	_, err := s.db.Exec("INSERT INTO votes (comment_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, comment_id) WHERE story_id IS NULL DO UPDATE SET up = $5",
 		commentID, userID, up, now, up)

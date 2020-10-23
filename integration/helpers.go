@@ -102,14 +102,14 @@ func (tc *testContext) prepareServer() {
 	})
 }
 
-func (tc *testContext) createUser(login string) (int64, error) {
-	var id int64
+func (tc *testContext) createUser(login string) (string, error) {
+	var id string
 	t := tabloid.NowFunc()
 	err := tc.pgStore.DB().Get(&id,
 		"INSERT INTO users (name, email, created_at, last_login_at) VALUES ($1, $2, $3, $4) RETURNING id",
 		login, login+"@email.com", t, t)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 
 	return id, nil

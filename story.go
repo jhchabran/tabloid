@@ -6,24 +6,24 @@ import (
 )
 
 type Story struct {
-	ID            int64     `db:"id"`
+	ID            string    `db:"id"`
 	Title         string    `db:"title"`
 	URL           string    `db:"url"`
 	Body          string    `db:"body"`
-	Score         int64     `db:"score"`
+	Score         int       `db:"score"`
 	Author        string    `db:"author"`
-	AuthorID      int64     `db:"author_id"`
+	AuthorID      string    `db:"author_id"`
 	CommentsCount int64     `db:"comments_count"`
 	CreatedAt     time.Time `db:"created_at"`
 }
 
 type StorySeenByUser struct {
 	Story
-	UserId int64        `db:"user_id"`
+	UserId string       `db:"user_id"`
 	Up     sql.NullBool `db:"up"`
 }
 
-func NewStory(title string, body string, authorID int64, url string) *Story {
+func NewStory(title string, body string, authorID string, url string) *Story {
 	return &Story{
 		Title:     title,
 		Body:      body,

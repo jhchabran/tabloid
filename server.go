@@ -211,13 +211,13 @@ func (s *Server) CurrentUser(req *http.Request) (*authentication.User, error) {
 
 type storyPresenter struct {
 	Pos           int
-	ID            int64
+	ID            string
 	Title         string
 	URL           string
 	Body          string
-	Score         int64
+	Score         int
 	Author        string
-	AuthorID      int64
+	AuthorID      string
 	CommentsCount int64
 	CreatedAt     time.Time
 	Upvoted       bool
@@ -482,7 +482,7 @@ func (s *Server) HandleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 		http.Error(res, "Failed to find story", http.StatusInternalServerError)
 	}
 
-	comments, err := s.store.ListComments(strconv.Itoa(int(story.ID)))
+	comments, err := s.store.ListComments(story.ID)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to list comments")
 		http.Error(res, "Failed to list comments", http.StatusInternalServerError)
@@ -531,7 +531,7 @@ func (s *Server) HandleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	comments, err := s.store.ListCommentsWithVotes(strconv.Itoa(int(story.ID)), userRecord.ID)
+	comments, err := s.store.ListCommentsWithVotes(story.ID, userRecord.ID)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to list comments")
 		http.Error(res, "Failed to list comments", http.StatusInternalServerError)
@@ -636,7 +636,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			}
 		}
 
-		http.Redirect(res, req, "/stories/"+strconv.Itoa(int(story.ID))+"/comments", http.StatusFound)
+		http.Redirect(res, req, "/stories/"+story.ID+"/comments", http.StatusFound)
 	}
 }
 
@@ -688,19 +688,13 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 
 		var comment *Comment
 		body := strings.TrimSpace(req.FormValue("body"))
-		_parentCommentID := req.FormValue("parent-id")
+		parentCommentID := req.FormValue("parent-id")
 
 		// if not top-level comment
-		if _parentCommentID != "" {
-			parentCommentID, err := strconv.Atoi(_parentCommentID)
-			if err != nil {
-				s.Logger.Warn().Err(err).Str("parentID", _parentCommentID).Msg("Failed to parse parent id")
-				http.Error(res, "Cannot parse parent ID", http.StatusUnprocessableEntity)
-				return
-			}
-			comment = NewComment(story.ID, sql.NullInt64{Int64: int64(parentCommentID), Valid: true}, body, userRecord.ID)
+		if parentCommentID != "" {
+			comment = NewComment(story.ID, sql.NullString{String: parentCommentID, Valid: true}, body, userRecord.ID)
 		} else {
-			comment = NewComment(story.ID, sql.NullInt64{Int64: 0, Valid: false}, body, userRecord.ID)
+			comment = NewComment(story.ID, sql.NullString{String: "", Valid: false}, body, userRecord.ID)
 		}
 
 		err = s.store.InsertComment(comment)
@@ -779,13 +773,7 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 			return
 		}
 
-		iid, err := strconv.Atoi(id)
-		if err != nil {
-			http.Error(res, "Invalid id", http.StatusBadRequest)
-			return
-		}
-
-		err = s.store.CreateOrUpdateVoteOnComment(int64(iid), userRecord.ID, true)
+		err = s.store.CreateOrUpdateVoteOnComment(id, userRecord.ID, true)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to create upvote")
 			http.Error(res, "Failed to create upvote", http.StatusInternalServerError)
@@ -845,12 +833,7 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 			return
 		}
 
-		iid, err := strconv.Atoi(id)
-		if err != nil {
-			http.Error(res, "Wrong format for story id", http.StatusBadRequest)
-			return
-		}
-		err = s.store.CreateOrUpdateVoteOnStory(int64(iid), userRecord.ID, true)
+		err = s.store.CreateOrUpdateVoteOnStory(id, userRecord.ID, true)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to create upvote")
 			http.Error(res, "Failed to create upvote", http.StatusInternalServerError)

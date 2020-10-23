@@ -2,7 +2,6 @@ package pgstore
 
 import (
 	"database/sql"
-	"strconv"
 	"testing"
 
 	"github.com/jhchabran/tabloid"
@@ -23,7 +22,7 @@ func TestPGStore(t *testing.T) {
 			store.DB().MustExec("TRUNCATE TABLE votes;")
 		})
 
-		var userID int64 = 1
+		var userID = "1"
 		story := tabloid.NewStory("foo", "body", userID, "http://foobar.com")
 		err := store.InsertStory(story)
 		c.Assert(err, qt.IsNil)
@@ -34,9 +33,9 @@ func TestPGStore(t *testing.T) {
 
 		c.Assert(err, qt.IsNil)
 		c.Assert(vote.UserID, qt.Equals, userID)
-		c.Assert(vote.StoryID, qt.Equals, sql.NullInt64{Int64: story.ID, Valid: true})
+		c.Assert(vote.StoryID, qt.Equals, sql.NullString{String: story.ID, Valid: true})
 		c.Assert(vote.Up, qt.IsTrue, qt.Commentf("vote must be up when creating a story"))
-		c.Assert(story.Score, qt.Equals, int64(1), qt.Commentf("story must have its score field updated"))
+		c.Assert(story.Score, qt.Equals, 1, qt.Commentf("story must have its score field updated"))
 	})
 
 	c.Run("List comments with votes", func(c *qt.C) {
@@ -58,7 +57,7 @@ func TestPGStore(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		c.Assert(0, qt.Not(qt.Equals), story.ID)
 
-		comment := tabloid.NewComment(story.ID, sql.NullInt64{}, "foobar", userB)
+		comment := tabloid.NewComment(story.ID, sql.NullString{}, "foobar", userB)
 		err = store.InsertComment(comment)
 		c.Assert(err, qt.IsNil)
 		err = store.CreateOrUpdateVoteOnComment(comment.ID, userA, true)
@@ -71,7 +70,7 @@ func TestPGStore(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 		c.Assert(0, qt.Not(qt.Equals), otherStory.ID)
 
-		otherComment := tabloid.NewComment(otherStory.ID, sql.NullInt64{}, "other foobar", userB)
+		otherComment := tabloid.NewComment(otherStory.ID, sql.NullString{}, "other foobar", userB)
 		err = store.InsertComment(otherComment)
 		c.Assert(err, qt.IsNil)
 		err = store.CreateOrUpdateVoteOnComment(otherComment.ID, userA, true)
@@ -79,7 +78,7 @@ func TestPGStore(t *testing.T) {
 		c.Assert(0, qt.Not(qt.Equals), otherComment.ID)
 
 		// check what the function returns
-		commentsWithVotes, err := store.ListCommentsWithVotes(strconv.Itoa(int(story.ID)), userB)
+		commentsWithVotes, err := store.ListCommentsWithVotes(story.ID, userB)
 		c.Assert(err, qt.IsNil)
 
 		c.Assert(commentsWithVotes, qt.HasLen, 1)

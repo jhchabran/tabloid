@@ -31,4 +31,15 @@
 	</div>
 </form>
 
+<script type="text/javascript">
+ document.addEventListener('DOMContentLoaded', function () {
+	 console.log("here")
+     const inputs = Array.from(document.querySelectorAll('input[name=url], textarea[name=body]'));
+     const inputListener = e => inputs.filter(i => i !== e.target).forEach(i => i.required = !e.target.value.length);
+
+     inputs.forEach(i => i.addEventListener('input', inputListener));
+ });
+</script>
+
+
 {{template "footer"}}

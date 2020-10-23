@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/jhchabran/tabloid"
 	"github.com/jhchabran/tabloid/authentication/github_auth"
@@ -64,7 +63,7 @@ func main() {
 				"\nComments "+
 				cfg.RootURL+
 				"/stories/"+
-				strconv.Itoa(int(story.ID))+
+				story.ID+
 				"/comments",
 			false))
 		if err != nil {
@@ -83,7 +82,7 @@ func main() {
 				"\": "+
 				cfg.RootURL+
 				"/stories/"+
-				strconv.Itoa(int(story.ID))+
+				story.ID+
 				"/comments",
 			false))
 		if err != nil {

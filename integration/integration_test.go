@@ -732,7 +732,7 @@ func TestCommentsVoting(t *testing.T) {
 	c.Assert(err, qt.IsNil)
 
 	// create a comment to upvote
-	comment := tabloid.NewComment(story.ID, sql.NullInt64{}, "kudos", id)
+	comment := tabloid.NewComment(story.ID, sql.NullString{}, "kudos", id)
 	err = tc.pgStore.InsertComment(comment)
 	c.Assert(err, qt.IsNil)
 
@@ -883,7 +883,7 @@ func TestHooks(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 
 		client := tc.newAuthenticatedClient()
-		resp, err := client.Get(tc.url("/stories/" + strconv.Itoa(int(story.ID)) + "/comments"))
+		resp, err := client.Get(tc.url("/stories/" + story.ID + "/comments"))
 		c.Assert(err, qt.IsNil)
 		c.Assert(resp.StatusCode, qt.Equals, 200)
 		defer resp.Body.Close()

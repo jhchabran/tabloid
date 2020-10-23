@@ -11,7 +11,7 @@ func TestOK(t *testing.T) {
 	c := qt.New(t)
 
 	var story *Story
-	var userID int64 = 1
+	var userID = "1"
 	now, _ := time.Parse(time.RFC3339, "2020-01-01T12:00:00Z")
 	nowF := func() time.Time { return now }
 

@@ -75,7 +75,7 @@ func main() {
 	// are newly created users.
 	strs := breakLorem()
 
-	var userIDs []int64
+	var userIDs []string
 	for _, u := range users {
 		_, err := pg.CreateOrUpdateUser(u, u+"@gmail.com")
 		if err != nil {
@@ -90,7 +90,7 @@ func main() {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var id int64
+		var id string
 		err = rows.Scan(&id)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Can't list users")
@@ -116,7 +116,7 @@ func main() {
 		authorID := userIDs[i%len(userIDs)]
 		body := strs[i%len(strs)]
 
-		comment := tabloid.NewComment(story.ID, sql.NullInt64{}, body, authorID)
+		comment := tabloid.NewComment(story.ID, sql.NullString{}, body, authorID)
 		err := pg.InsertComment(comment)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Can't create comment")
@@ -126,7 +126,7 @@ func main() {
 		for j := 0; j < i%4; j++ {
 			authorID := userIDs[j%len(userIDs)]
 			body := strs[j%len(strs)]
-			subcomment := tabloid.NewComment(story.ID, sql.NullInt64{Int64: comment.ID, Valid: true}, body, authorID)
+			subcomment := tabloid.NewComment(story.ID, sql.NullString{String: comment.ID, Valid: true}, body, authorID)
 			err := pg.InsertComment(subcomment)
 			if err != nil {
 				log.Fatal().Err(err).Msg("Can't create sub-comment")
@@ -135,7 +135,7 @@ func main() {
 			for k := 0; k < i%3; k++ {
 				authorID := userIDs[k%len(userIDs)]
 				body := strs[k%len(strs)]
-				subcomment := tabloid.NewComment(story.ID, sql.NullInt64{Int64: subcomment.ID, Valid: true}, body, authorID)
+				subcomment := tabloid.NewComment(story.ID, sql.NullString{String: subcomment.ID, Valid: true}, body, authorID)
 				err := pg.InsertComment(subcomment)
 				if err != nil {
 					log.Fatal().Err(err).Msg("Can't create sub-sub-comment")

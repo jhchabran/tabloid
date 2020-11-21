@@ -8,8 +8,8 @@ import (
 	"github.com/jhchabran/tabloid/authentication/github_auth"
 	"github.com/jhchabran/tabloid/cmd"
 	"github.com/jhchabran/tabloid/pgstore"
-	"github.com/nlopes/slack"
 	"github.com/rs/zerolog/log"
+	"github.com/slack-go/slack"
 )
 
 // For the moment, this code is the one that powers my own instance, for development purpose.

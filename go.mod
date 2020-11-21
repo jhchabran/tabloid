@@ -13,9 +13,9 @@ require (
 	github.com/julienschmidt/httprouter v1.3.0
 	github.com/lib/pq v1.2.0
 	github.com/mitchellh/mapstructure v1.1.2
-	github.com/nlopes/slack v0.6.0
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rs/zerolog v1.19.0
-	github.com/slack-go/slack v0.7.2 // indirect
+	github.com/slack-go/slack v0.7.2
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	golang.org/x/oauth2 v0.0.0-20191122200657-5d9234df094c
 )

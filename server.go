@@ -631,6 +631,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 		for _, h := range s.storyHooks {
 			err := h(story)
 			if err != nil {
+				s.Logger.Warn().Err(err).Msg("story hook failed")
 				http.Error(res, "hook failed", http.StatusInternalServerError)
 				return
 			}
@@ -709,6 +710,7 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		for _, h := range s.commentHooks {
 			err := h(story, comment)
 			if err != nil {
+				s.Logger.Warn().Err(err).Msg("story hook failed")
 				http.Error(res, "hook failed", http.StatusInternalServerError)
 				return
 			}

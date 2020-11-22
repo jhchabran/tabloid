@@ -119,6 +119,12 @@ func (c *Config) Load() error {
 		c.Addr = v
 	}
 
+	// HACK
+	v = os.Getenv("PORT")
+	if v != "" {
+		c.Addr = ":" + v
+	}
+
 	v = os.Getenv("ROOT_URL")
 	if v != "" {
 		c.RootURL = v

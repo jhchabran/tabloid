@@ -93,14 +93,19 @@ func main() {
 	logger := cmd.SetupLogger(cfg)
 
 	// setup database
-	pgcfg := fmt.Sprintf(
-		"user=%v dbname=%v sslmode=disable password=%v host=%v",
-		cfg.DatabaseUser,
-		cfg.DatabaseName,
-		cfg.DatabasePassword,
-		cfg.DatabaseHost,
-	)
-	pg := pgstore.New(pgcfg)
+	var pg *pgstore.PGStore
+	if cfg.DatabaseURL != "" {
+		pg = pgstore.New(cfg.DatabaseURL)
+	} else {
+		pgcfg := fmt.Sprintf(
+			"user=%v dbname=%v sslmode=disable password=%v host=%v",
+			cfg.DatabaseUser,
+			cfg.DatabaseName,
+			cfg.DatabasePassword,
+			cfg.DatabaseHost,
+		)
+		pg = pgstore.New(pgcfg)
+	}
 
 	// setup authentication
 	ll := logger.With().Str("component", "github auth").Logger()

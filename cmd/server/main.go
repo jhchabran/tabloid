@@ -136,9 +136,7 @@ func main() {
 		logger.Fatal().Err(err).Msg("Cannot populate the slack to github username table")
 	}
 
-	userFmt := func(uid string) string {
-		return "<@" + uid + ">"
-	}
+	userFmt := func(uid string) string { return "<@" + uid + ">" }
 
 	s.AddStoryHook(func(story *tabloid.Story) error {
 		s.Logger.Debug().Msg("Adding a story hook")
@@ -166,8 +164,22 @@ func main() {
 	s.AddCommentHook(func(story *tabloid.Story, comment *tabloid.Comment) error {
 		s.Logger.Debug().Msg("Adding a comment hook")
 		uid, err := resolver.Resolve(comment.Author)
+		// TODO deal with not found usernames
 		if err != nil {
 			return err
+		}
+
+		var mentions string
+
+		if pings := comment.Pings(); len(pings) > 0 {
+			mentions = " , mentioning"
+			for _, name := range pings {
+				uid, err := resolver.Resolve(name)
+				if err != nil {
+					return err
+				}
+				mentions = mentions + userFmt(uid) + " "
+			}
 		}
 
 		_, _, err = api.PostMessage(cid, slack.MsgOptionText(
@@ -179,7 +191,8 @@ func main() {
 				cfg.RootURL+
 				"/stories/"+
 				story.ID+
-				"/comments",
+				"/comments"+
+				mentions,
 			false))
 		if err != nil {
 			return err

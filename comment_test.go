@@ -2,6 +2,7 @@ package tabloid
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 
 	qt "github.com/frankban/quicktest"
@@ -62,6 +63,31 @@ func TestNewCommentPresentersTree(t *testing.T) {
 	}
 
 	for want, input := range tests {
-		c.Assert(want, qt.Equals, input)
+		c.Assert(input, qt.Equals, want)
 	}
+}
+
+func TestPings(t *testing.T) {
+	c := qt.New(t)
+
+	tests := []struct {
+		body string
+		want []string
+	}{
+		{"@foo may be interested", []string{"foo"}},
+		{"@foo and @bar may be interested", []string{"foo", "bar"}},
+		{"hey @foo-a and @foo-b", []string{"foo-a", "foo-b"}},
+		{"hey @foo, @bar", []string{"foo", "bar"}},
+		{"ping @foo. @bar knows", []string{"foo", "bar"}},
+		{"contact foo@bar.com", nil},
+		{"try user@localhost it should work", nil},
+	}
+
+	for _, t := range tests {
+		c.Run(fmt.Sprintf("'%s' must return (%v)", t.body, t.want), func(c *qt.C) {
+			comment := NewComment("1", sql.NullString{}, t.body, "1")
+			c.Assert(comment.Pings(), qt.DeepEquals, t.want)
+		})
+	}
+
 }

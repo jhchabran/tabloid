@@ -119,7 +119,6 @@ func (c *Config) Load() error {
 		c.Addr = v
 	}
 
-	// HACK
 	v = os.Getenv("PORT")
 	if v != "" {
 		c.Addr = ":" + v

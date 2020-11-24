@@ -75,7 +75,7 @@ From there, this file can be versioned and Tabloid updates are just a matter of 
 
 ## Deploying it
 
-Presently, it's not streamlined at all, as it's still the early stages and no stable releases had been made. The main goal there is to provide an example repository that can be forked, modified and deployed to common cloud providers with a single button. See #51 for this work item.
+Presently, it's not streamlined at all, as it's still the early stages and no stable releases had been made. The main goal there is to provide an example repository that can be forked, modified and deployed to common cloud providers with a single button (See [#51](https://github.com/jhchabran/tabloid/issues/51), [#8](https://github.com/jhchabran/tabloid/issues/8))
 
 Still, for now it can be easily deployed on Heroku with the provided Dockerfile.
 

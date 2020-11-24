@@ -18,9 +18,10 @@ type Config struct {
 	DatabaseUser       string `json:"database_user"`
 	DatabaseHost       string `json:"database_host"`
 	DatabasePassword   string `json:"database_password"`
+	DatabaseURL        string `json:"database_url"`
 	GithubClientID     string `json:"github_client_id"`
 	GithubClientSecret string `json:"github_client_secret"`
-	ServerSecret       string `json:"server_secret,required"`
+	ServerSecret       string `json:"server_secret"`
 	StoriesPerPage     int    `json:"stories_per_page"`
 	Addr               string `json:"addr"`
 	RootURL            string `json:"root_url"`
@@ -61,6 +62,11 @@ func (c *Config) Load() error {
 	v = os.Getenv("LOG_FORMAT")
 	if v != "" {
 		c.LogFormat = v
+	}
+
+	v = os.Getenv("DATABASE_URL")
+	if v != "" {
+		c.DatabaseURL = v
 	}
 
 	v = os.Getenv("DATABASE_NAME")
@@ -111,6 +117,11 @@ func (c *Config) Load() error {
 	v = os.Getenv("ADDR")
 	if v != "" {
 		c.Addr = v
+	}
+
+	v = os.Getenv("PORT")
+	if v != "" {
+		c.Addr = ":" + v
 	}
 
 	v = os.Getenv("ROOT_URL")

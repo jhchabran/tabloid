@@ -30,6 +30,9 @@ See `config.example.json`.
 
 - `LOG_LEVEL` sets log level; defaults to `info`
 - `LOG_FORMAT` sets log format; defaults to `json`
+- `PORT` sets the port to listen for incoming requests, supersedes `ADDR`.
+- `ADDR` sets the address to listen for incoming requests
+- `DATABASE_URL` sets the database url string, supersedes other database settings below.
 - `DATABASE_NAME`sets the database name
 - `DATABASE_USER`sets the database user
 - `DATABASE_HOST`sets the database host
@@ -38,6 +41,10 @@ See `config.example.json`.
 - `GITHUB_CLIENT_SECRET`sets the Github client secret
 - `SERVER_SECRET`sets the server secret for cookies
 - `STORIES_PER_PAGE`sets the server number of stories per page; default to `20`.
+
+Configuration for the provided example main (`cmd/server/main.go`), used for dev purpose until we reach a stable release:
+
+- `GH_USERNAMES_JSON` sets the url to a json file representing a table of slack handles github handles, used in my custom hook, for pinging users in comments notifications.
 
 ### Bugs
 

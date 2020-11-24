@@ -637,6 +637,7 @@ func TestCommentsSubmiting(t *testing.T) {
 		defer resp.Body.Close()
 
 		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
 		c.Assert(doc.Find(".comment-body").Text(), qt.Contains, "very insightful comment")
 		c.Assert(doc.Find(".comment-meta").Text(), qt.Contains, "fakeLogin1, 1 point, today")
 	})
@@ -680,6 +681,7 @@ func TestCommentsSubmiting(t *testing.T) {
 		defer resp.Body.Close()
 
 		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
 		c.Assert(doc.Find(".comment-body").Text(), qt.Contains, "colorful comment")
 		c.Assert(doc.Find(".comment-meta").Text(), qt.Contains, "fakeLogin1, 1 point, today")
 	})
@@ -707,6 +709,7 @@ func TestCommentsSubmiting(t *testing.T) {
 		defer resp.Body.Close()
 
 		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
 		c.Assert(doc.Find(".comment-body").Text(), qt.Contains, "very insightful comment")
 	})
 

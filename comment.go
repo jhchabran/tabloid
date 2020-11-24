@@ -2,8 +2,13 @@ package tabloid
 
 import (
 	"database/sql"
+	"regexp"
 	"time"
 )
+
+// A username starts with a @, includes only alphanumerical chars or a hyphen.
+// It is preceded by a space or line beginning and is followed by a space or the end of the line.
+var usernameRegexp = regexp.MustCompile(`(?:^|\s+)@([[:alnum:]][[:alnum:]-]*[[:alnum:]])(?:$|\s+|[,;.])`)
 
 type Comment struct {
 	ID              string         `db:"id"`
@@ -18,6 +23,16 @@ type Comment struct {
 
 func (c *Comment) GetID() string                      { return c.ID }
 func (c *Comment) GetParentCommentID() sql.NullString { return c.ParentCommentID }
+func (c *Comment) Pings() []string {
+	matches := usernameRegexp.FindAllStringSubmatch(c.Body, -1)
+
+	var res []string
+	for _, m := range matches {
+		res = append(res, m[1:]...)
+	}
+
+	return res
+}
 
 type CommentSeenByUser struct {
 	Comment

@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jhchabran/tabloid"
@@ -75,7 +76,7 @@ outer:
 }
 
 func (r *SlackUsernameResolver) Resolve(username string) (string, error) {
-	if name, ok := r.slackNames[username]; ok {
+	if name, ok := r.slackNames[strings.ToLower(username)]; ok {
 		return r.slackUsersIDs[name], nil
 	} else {
 		return "", usernameNotFoundError
@@ -172,7 +173,7 @@ func main() {
 		var mentions string
 
 		if pings := comment.Pings(); len(pings) > 0 {
-			mentions = " , mentioning"
+			mentions = " , mentioning "
 			for _, name := range pings {
 				uid, err := resolver.Resolve(name)
 				if err != nil {

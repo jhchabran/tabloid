@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
 	"github.com/julienschmidt/httprouter"
 	"github.com/rs/zerolog"
@@ -22,55 +21,31 @@ import (
 	"golang.org/x/oauth2"
 )
 
-const (
-	sessionKey = "tabloid-session"
-)
+// contextKey is a type for storing values in each request context.
+type contextKey string
 
-var NowFunc func() time.Time = time.Now
+// ctxKeyUser is the context key for storing the current user session, set by a middleware.
+var ctxKeyUser = contextKey("user")
 
-var helpers template.FuncMap = template.FuncMap{
-	"daysAgo": func(t time.Time) string {
-		now := time.Now()
-		days := int(now.Sub(t).Hours() / 24)
-
-		if days < 1 {
-			return "today"
-		}
-		return strconv.Itoa(days) + " days ago"
-	},
-	"title": strings.Title,
-	"dict": func(values ...interface{}) (map[string]interface{}, error) {
-		if len(values)%2 != 0 {
-			return nil, fmt.Errorf("invalid dict call, odd number of arguments")
-		}
-
-		dict := make(map[string]interface{}, len(values)/2)
-		for i := 0; i < len(values); i += 2 {
-			k, ok := values[i].(string)
-			if !ok {
-				return nil, fmt.Errorf("dict keys must be strings")
-			}
-			v := values[i+1]
-			dict[k] = v
-		}
-
-		return dict, nil
-	},
+// ctxUser is a helper func to fetch the user session from the context.
+func ctxUser(ctx context.Context) *authentication.User {
+	return ctx.Value(ctxKeyUser).(*authentication.User)
 }
 
-type middleware func(http.Handler) http.Handler
+// StoryHookFn represents a function suitable for Story hooks
 type StoryHookFn func(*Story) error
+
+// CommentHookFn represents a function suitable for Commet hooks
 type CommentHookFn func(*Story, *Comment) error
 
+// Server represents the HTTP server component, with all its runtime dependencies.
 type Server struct {
+	// Logger is the server logger
 	Logger          zerolog.Logger
 	config          *ServerConfig
 	store           Store
-	dbString        string
-	sessionStore    *sessions.CookieStore
 	router          *httprouter.Router
 	authService     authentication.AuthService
-	middlewares     []middleware
 	rootHandler     http.Handler
 	done            chan struct{}
 	idleConnsClosed chan struct{}
@@ -78,6 +53,7 @@ type Server struct {
 	commentHooks    []CommentHookFn
 }
 
+// ServerConfig represents the settings required for the server to operate.
 type ServerConfig struct {
 	Addr           string
 	StoriesPerPage int
@@ -88,7 +64,18 @@ func init() {
 	gob.Register(&oauth2.Token{})
 }
 
+// NewServer returns a server instance, configured with given components and with middlewares installed.
 func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authService authentication.AuthService) *Server {
+	s := &Server{
+		config:          config,
+		store:           store,
+		authService:     authService,
+		router:          httprouter.New(),
+		Logger:          logger,
+		done:            make(chan struct{}),
+		idleConnsClosed: make(chan struct{}),
+	}
+
 	middlewares := []middleware{
 		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
 			hlog.FromRequest(r).Info().
@@ -100,16 +87,7 @@ func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authSer
 				Msg("")
 		}),
 		hlog.NewHandler(logger),
-	}
-
-	s := &Server{
-		config:          config,
-		store:           store,
-		authService:     authService,
-		router:          httprouter.New(),
-		Logger:          logger,
-		done:            make(chan struct{}),
-		idleConnsClosed: make(chan struct{}),
+		loadCurrentUserMiddleware(s),
 	}
 
 	var h http.Handler = s.router
@@ -122,6 +100,7 @@ func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authSer
 	return s
 }
 
+// Prepare setups all internal components, like connecting to the database, declaring routes and loading templates.
 func (s *Server) Prepare() error {
 	// database
 	s.Logger.Debug().Msg("connecting to database")
@@ -149,6 +128,7 @@ func (s *Server) Prepare() error {
 	return nil
 }
 
+// Start runs the server and will block until stopped.
 func (s *Server) Start() error {
 	httpServer := http.Server{Addr: s.config.Addr, Handler: s}
 
@@ -173,21 +153,26 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Stop gracefully stops a running server.
 func (s *Server) Stop() {
 	close(s.done)
 	<-s.idleConnsClosed
 }
 
+// ServeHTTP implements a http.Handler that answers incoming requests.
 func (s *Server) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 	s.rootHandler.ServeHTTP(res, req)
 }
 
+// HandleOAuthStart handles requests starting the OAauth authentication process.
 func (s *Server) HandleOAuthStart() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		s.authService.Start(res, req)
 	}
 }
 
+// HandleOAuthCallback handles requests of the OAuth provider redirects the user back
+// to Tabloid, after successfully authenticating him on its side.
 func (s *Server) HandleOAuthCallback() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		// need to think about error handling here
@@ -199,45 +184,16 @@ func (s *Server) HandleOAuthCallback() httprouter.Handle {
 	}
 }
 
+// HandleOAuthDestroy handles requests destroying the current session.
 func (s *Server) HandleOAuthDestroy() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		s.authService.Destroy(res, req)
 	}
 }
 
-func (s *Server) CurrentUser(req *http.Request) (*authentication.User, error) {
-	return s.authService.CurrentUser(req)
-}
-
-type storyPresenter struct {
-	Pos           int
-	ID            string
-	Title         string
-	URL           string
-	Body          string
-	Score         int
-	Author        string
-	AuthorID      string
-	CommentsCount int64
-	CreatedAt     time.Time
-	Upvoted       bool
-}
-
-func newStoryPresenter(story *Story, pos int) *storyPresenter {
-	return &storyPresenter{
-		Pos:           pos,
-		ID:            story.ID,
-		Title:         story.Title,
-		URL:           story.URL,
-		Body:          story.Body,
-		Score:         story.Score,
-		Author:        story.Author,
-		AuthorID:      story.AuthorID,
-		CommentsCount: story.CommentsCount,
-		CreatedAt:     story.CreatedAt,
-	}
-}
-
+// HandleIndex handles requests for the root path, listing sorted paginated stories.
+// If the client isn't authenticated, it serves a template with no upvoting nor commenting
+// capabilities.
 func (s *Server) HandleIndex() httprouter.Handle {
 	tmpl, err := template.New("index.html").Funcs(helpers).ParseFiles("assets/templates/index.html",
 		"assets/templates/_header.html",
@@ -248,14 +204,9 @@ func (s *Server) HandleIndex() httprouter.Handle {
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		data, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
-			http.Error(res, "Failed to fetch session data", http.StatusInternalServerError)
-			return
-		}
+		userData := ctxUser(req.Context())
 
-		if data != nil {
+		if userData != nil {
 			s.Logger.Debug().Msg("Authenticated")
 			s.handleAuthenticatedIndex(res, req, params, tmpl)
 			return
@@ -267,15 +218,11 @@ func (s *Server) HandleIndex() httprouter.Handle {
 	}
 }
 
+// handleAuthenticatedIndex handles requests for when the user is authenticated, notably showing its previous votes.
 func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
-	data, err := s.CurrentUser(req)
-	if err != nil {
-		s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
-		http.Error(res, "Failed to fetch session data", http.StatusInternalServerError)
-		return
-	}
+	userData := ctxUser(req.Context())
 
-	userRecord, err := s.store.FindUserByLogin(data.Login)
+	userRecord, err := s.store.FindUserByLogin(userData.Login)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 		http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -316,7 +263,7 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 
 	vars := map[string]interface{}{
 		"Stories":  storyPresenters,
-		"Session":  data,
+		"Session":  userData,
 		"NextPage": page + 1,
 		"PrevPage": page - 1,
 		"CurrPage": page,
@@ -342,6 +289,7 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 	}
 }
 
+// handleUnauthenticatedIndex handles requests for when the current user is not authenticated.
 func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
 	res.Header().Set("Content-Type", "text/html")
 
@@ -396,6 +344,8 @@ func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.R
 	}
 }
 
+// HandleSubmit handles requests to get the form for submitting a Story. It redirects to the root path if
+// not authenticated.
 func (s *Server) HandleSubmit() httprouter.Handle {
 	tmpl, err := template.New("submit.html").Funcs(helpers).ParseFiles(
 		"assets/templates/submit.html",
@@ -408,21 +358,16 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		userSession, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
-			http.Error(res, "Failed to fetch session data", http.StatusMethodNotAllowed)
-			return
-		}
+		userData := ctxUser(req.Context())
 
 		// redirect if unauthenticated
-		if userSession == nil {
+		if userData == nil {
 			http.Redirect(res, req, "/", http.StatusFound)
 			return
 		}
 
 		vars := map[string]interface{}{
-			"Session": userSession,
+			"Session": userData,
 		}
 
 		err = tmpl.Execute(res, vars)
@@ -434,6 +379,8 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 	}
 }
 
+// HandleShow handles requests to access a particular Story, showing all its comments and allowing the user to comment
+// if authenticated.
 func (s *Server) HandleShow() httprouter.Handle {
 	tmpl, err := template.New("show.html").Funcs(helpers).ParseFiles(
 		"assets/templates/show.html",
@@ -449,30 +396,20 @@ func (s *Server) HandleShow() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		data, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
-			http.Error(res, "Failed to fetch Github user", http.StatusMethodNotAllowed)
-			return
-		}
+		userData := ctxUser(req.Context())
 
-		if data != nil {
+		if userData != nil {
 			s.Logger.Debug().Msg("authenticated")
-			s.HandleShowAuthenticated(res, req, params, tmpl)
+			s.handleShowAuthenticated(res, req, params, tmpl)
 		} else {
 			s.Logger.Debug().Msg("unauthenticated")
-			s.HandleShowUnauthenticated(res, req, params, tmpl)
+			s.handleShowUnauthenticated(res, req, params, tmpl)
 		}
 	}
 }
 
-func (s *Server) HandleShowUnauthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
-	data, err := s.CurrentUser(req)
-	if err != nil {
-		s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
-		http.Error(res, "Failed to fetch Github user", http.StatusMethodNotAllowed)
-		return
-	}
+func (s *Server) handleShowUnauthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
+	userData := ctxUser(req.Context())
 
 	id := params.ByName("id")
 	story, err := s.store.FindStory(id)
@@ -498,7 +435,7 @@ func (s *Server) HandleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 	err = tmpl.Execute(res, map[string]interface{}{
 		"Story":    story,
 		"Comments": commentsTree,
-		"Session":  data,
+		"Session":  userData,
 	})
 
 	if err != nil {
@@ -508,13 +445,8 @@ func (s *Server) HandleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 	}
 }
 
-func (s *Server) HandleShowAuthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
-	data, err := s.CurrentUser(req)
-	if err != nil {
-		s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
-		http.Error(res, "Failed to fetch Github user", http.StatusMethodNotAllowed)
-		return
-	}
+func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
+	userData := ctxUser(req.Context())
 
 	id := params.ByName("id")
 	story, err := s.store.FindStory(id)
@@ -524,7 +456,7 @@ func (s *Server) HandleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 		http.Error(res, "Failed to find story", http.StatusInternalServerError)
 	}
 
-	userRecord, err := s.store.FindUserByLogin(data.Login)
+	userRecord, err := s.store.FindUserByLogin(userData.Login)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 		http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -547,7 +479,7 @@ func (s *Server) HandleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 	err = tmpl.Execute(res, map[string]interface{}{
 		"Story":    story,
 		"Comments": commentsTree,
-		"Session":  data,
+		"Session":  userData,
 	})
 
 	if err != nil {
@@ -557,23 +489,21 @@ func (s *Server) HandleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 	}
 }
 
+// HandleSubmitAction handles requests for when a user submit a Story form. It redirects the user to the root path if not
+// authenticated. In case someone bypass the client-side form validations with invalid form data,
+// it returns a HTTP error.
 func (s *Server) HandleSubmitAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		data, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failuped to fetch Github user")
-			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
-			return
-		}
+		userData := ctxUser(req.Context())
 
-		if data == nil {
+		if userData == nil {
 			http.Error(res, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		err = req.ParseForm()
+		err := req.ParseForm()
 		if err != nil {
 			s.Logger.Warn().Err(err).Msg("Failed to parse form")
 			http.Error(res, "Failed to parse form", http.StatusBadRequest)
@@ -641,18 +571,16 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 	}
 }
 
+// HandleSubmitCommentAction handles requests for when a user submit a Comment form for a given Story. It redirects
+// the user to the root path if not authenticated. In case someone bypass the client-side form validations
+// with invalid form data, it returns a HTTP error.
 func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		data, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failuped to fetch Github user")
-			http.Error(res, "Failed to fetch Github data", http.StatusMethodNotAllowed)
-			return
-		}
+		userData := ctxUser(req.Context())
 		// redirect if unauthenticated
-		if data == nil {
+		if userData == nil {
 			http.Error(res, "Must be authenticated to submit comment", http.StatusUnauthorized)
 			return
 		}
@@ -721,6 +649,8 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	}
 }
 
+// HandleVoteCommentAction handles requests to vote on a comment. It redirects back to the Story on which
+// the Comment was posted on. If not authenticated, it redirects to the root path.
 func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		// We'll redirect to a given route after submitting this, so we use redir to specify it
@@ -754,16 +684,11 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 			return
 		}
 
-		userSession, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to authenticate user")
-			http.Error(res, "Failed to authenticate user", http.StatusInternalServerError)
-			return
-		}
+		userData := ctxUser(req.Context())
 
 		// TODO deal with user not being authenticated
 
-		userRecord, err := s.store.FindUserByLogin(userSession.Login)
+		userRecord, err := s.store.FindUserByLogin(userData.Login)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -788,21 +713,7 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 	}
 }
 
-// TODO move this, and test it
-func normalizeRedir(redir []string) (string, error) {
-	if len(redir) != 1 {
-		return "", fmt.Errorf("more than one redir path")
-	}
-	if redir[0] == "" {
-		return "", fmt.Errorf("redir can't be empty")
-	}
-	if !strings.HasPrefix(redir[0], "/") {
-		return "", fmt.Errorf("redir must start with a /")
-	}
-
-	return redir[0], nil
-}
-
+// HandleVoteStoryAction handles requests to vote on a given Story. If not authenticated, it redirects to the root path.
 func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		// We'll redirect to a given route after submitting this, so we use redir to specify it
@@ -821,14 +732,9 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 			return
 		}
 
-		userSession, err := s.CurrentUser(req)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to authenticate user")
-			http.Error(res, "Failed to authenticate user", http.StatusInternalServerError)
-			return
-		}
+		userData := ctxUser(req.Context())
 
-		userRecord, err := s.store.FindUserByLogin(userSession.Login)
+		userRecord, err := s.store.FindUserByLogin(userData.Login)
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -847,10 +753,60 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 	}
 }
 
+// AddStoryHook registers a given StoryHookFn, that will be called every time a story is submitted.
+// Multiple hooks will be called in the order they were registered.
+// If a hook fails and returns an error, it will interrupt the request but won't prevent the Story to be created.
 func (s *Server) AddStoryHook(fn StoryHookFn) {
 	s.storyHooks = append(s.storyHooks, fn)
 }
 
+// AddCommentHook registers a given CommentHookFn, that will be called every time a story is submitted.
+// Multiple hooks will be called in the order they were registered.
+// If a hook fails and returns an error, it will interrupt the request but won't prevent the Comment to be created.
 func (s *Server) AddCommentHook(fn CommentHookFn) {
 	s.commentHooks = append(s.commentHooks, fn)
+}
+
+type storyPresenter struct {
+	Pos           int
+	ID            string
+	Title         string
+	URL           string
+	Body          string
+	Score         int
+	Author        string
+	AuthorID      string
+	CommentsCount int64
+	CreatedAt     time.Time
+	Upvoted       bool
+}
+
+func newStoryPresenter(story *Story, pos int) *storyPresenter {
+	return &storyPresenter{
+		Pos:           pos,
+		ID:            story.ID,
+		Title:         story.Title,
+		URL:           story.URL,
+		Body:          story.Body,
+		Score:         story.Score,
+		Author:        story.Author,
+		AuthorID:      story.AuthorID,
+		CommentsCount: story.CommentsCount,
+		CreatedAt:     story.CreatedAt,
+	}
+}
+
+// TODO move this, and test it
+func normalizeRedir(redir []string) (string, error) {
+	if len(redir) != 1 {
+		return "", fmt.Errorf("more than one redir path")
+	}
+	if redir[0] == "" {
+		return "", fmt.Errorf("redir can't be empty")
+	}
+	if !strings.HasPrefix(redir[0], "/") {
+		return "", fmt.Errorf("redir must start with a /")
+	}
+
+	return redir[0], nil
 }

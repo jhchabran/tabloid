@@ -21,17 +21,6 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// contextKey is a type for storing values in each request context.
-type contextKey string
-
-// ctxKeyUser is the context key for storing the current user session, set by a middleware.
-var ctxKeyUser = contextKey("user")
-
-// ctxUser is a helper func to fetch the user session from the context.
-func ctxUser(ctx context.Context) *authentication.User {
-	return ctx.Value(ctxKeyUser).(*authentication.User)
-}
-
 // StoryHookFn represents a function suitable for Story hooks
 type StoryHookFn func(*Story) error
 
@@ -76,7 +65,8 @@ func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authSer
 		idleConnsClosed: make(chan struct{}),
 	}
 
-	middlewares := []middleware{
+	// Those are top level middewares, set before the router; every requests will go through them.
+	middlewares := []httpMiddleware{
 		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
 			hlog.FromRequest(r).Info().
 				Str("method", r.Method).
@@ -87,7 +77,6 @@ func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authSer
 				Msg("")
 		}),
 		hlog.NewHandler(logger),
-		loadCurrentUserMiddleware(s),
 	}
 
 	var h http.Handler = s.router
@@ -111,19 +100,25 @@ func (s *Server) Prepare() error {
 
 	// routes
 	s.Logger.Debug().Msg("declaring routes")
-	s.router.GET("/", s.HandleIndex())
+
 	s.router.GET("/oauth/start", s.HandleOAuthStart())
 	s.router.GET("/oauth/authorize", s.HandleOAuthCallback())
 	s.router.GET("/oauth/destroy", s.HandleOAuthDestroy())
+
+	withMiddlewares(func(m middleware) {
+		s.router.GET("/", m(s.HandleIndex()))
+		s.router.GET("/stories/:id/comments", m(s.HandleShow()))
+		s.router.GET("/submit", m(s.HandleSubmit()))
+	}, s.loadSessionMiddleware())
+
+	withMiddlewares(func(m middleware) {
+		s.router.POST("/submit", m(s.HandleSubmitAction()))
+		s.router.POST("/stories/:id/comments", m(s.HandleSubmitCommentAction()))
+		s.router.POST("/stories/:id/votes", m(s.HandleVoteStoryAction()))
+		s.router.POST("/story/:story_id/comments/:id/votes", m(s.HandleVoteCommentAction()))
+	}, s.loadSessionMiddleware(), s.loadUserMiddleware())
+
 	s.router.ServeFiles("/static/*filepath", http.Dir("assets/static"))
-	s.router.GET("/submit", s.HandleSubmit())
-	s.router.POST("/submit", s.HandleSubmitAction())
-	s.router.GET("/stories/:id/comments", s.HandleShow())
-	s.router.POST("/stories/:id/comments", s.HandleSubmitCommentAction())
-	s.router.POST("/stories/:id/votes", s.HandleVoteStoryAction())
-	// httprouter conflicts if we use /stories/:story_id, waiting on httprouter v2
-	// https://github.com/julienschmidt/httprouter/issues/175#issuecomment-270075906
-	s.router.POST("/story/:story_id/comments/:id/votes", s.HandleVoteCommentAction())
 
 	return nil
 }
@@ -204,9 +199,9 @@ func (s *Server) HandleIndex() httprouter.Handle {
 	}
 
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
-		userData := ctxUser(req.Context())
+		session := ctxSession(req.Context())
 
-		if userData != nil {
+		if session != nil {
 			s.Logger.Debug().Msg("Authenticated")
 			s.handleAuthenticatedIndex(res, req, params, tmpl)
 			return
@@ -220,9 +215,9 @@ func (s *Server) HandleIndex() httprouter.Handle {
 
 // handleAuthenticatedIndex handles requests for when the user is authenticated, notably showing its previous votes.
 func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
-	userData := ctxUser(req.Context())
+	session := ctxSession(req.Context())
 
-	userRecord, err := s.store.FindUserByLogin(userData.Login)
+	userRecord, err := s.store.FindUserByLogin(session.Login)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 		http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -263,7 +258,7 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 
 	vars := map[string]interface{}{
 		"Stories":  storyPresenters,
-		"Session":  userData,
+		"Session":  session,
 		"NextPage": page + 1,
 		"PrevPage": page - 1,
 		"CurrPage": page,
@@ -358,16 +353,16 @@ func (s *Server) HandleSubmit() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		userData := ctxUser(req.Context())
+		session := ctxSession(req.Context())
 
 		// redirect if unauthenticated
-		if userData == nil {
+		if session == nil {
 			http.Redirect(res, req, "/", http.StatusFound)
 			return
 		}
 
 		vars := map[string]interface{}{
-			"Session": userData,
+			"Session": session,
 		}
 
 		err = tmpl.Execute(res, vars)
@@ -396,9 +391,9 @@ func (s *Server) HandleShow() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		userData := ctxUser(req.Context())
+		session := ctxSession(req.Context())
 
-		if userData != nil {
+		if session != nil {
 			s.Logger.Debug().Msg("authenticated")
 			s.handleShowAuthenticated(res, req, params, tmpl)
 		} else {
@@ -409,7 +404,7 @@ func (s *Server) HandleShow() httprouter.Handle {
 }
 
 func (s *Server) handleShowUnauthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
-	userData := ctxUser(req.Context())
+	session := ctxSession(req.Context())
 
 	id := params.ByName("id")
 	story, err := s.store.FindStory(id)
@@ -435,7 +430,7 @@ func (s *Server) handleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 	err = tmpl.Execute(res, map[string]interface{}{
 		"Story":    story,
 		"Comments": commentsTree,
-		"Session":  userData,
+		"Session":  session,
 	})
 
 	if err != nil {
@@ -446,7 +441,7 @@ func (s *Server) handleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 }
 
 func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) {
-	userData := ctxUser(req.Context())
+	session := ctxSession(req.Context())
 
 	id := params.ByName("id")
 	story, err := s.store.FindStory(id)
@@ -456,7 +451,7 @@ func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 		http.Error(res, "Failed to find story", http.StatusInternalServerError)
 	}
 
-	userRecord, err := s.store.FindUserByLogin(userData.Login)
+	userRecord, err := s.store.FindUserByLogin(session.Login)
 	if err != nil {
 		s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 		http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -479,7 +474,7 @@ func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 	err = tmpl.Execute(res, map[string]interface{}{
 		"Story":    story,
 		"Comments": commentsTree,
-		"Session":  userData,
+		"Session":  session,
 	})
 
 	if err != nil {
@@ -495,13 +490,6 @@ func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 func (s *Server) HandleSubmitAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, _ httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
-
-		userData := ctxUser(req.Context())
-
-		if userData == nil {
-			http.Error(res, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
 
 		err := req.ParseForm()
 		if err != nil {
@@ -531,21 +519,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		// grab author stuff
-		userSession, err := s.authService.CurrentUser(req)
-		if err != nil {
-			s.Logger.Warn().Err(err).Msg("Failed to fetch Github user")
-			http.Error(res, "Failed to fetch current user", http.StatusInternalServerError)
-			return
-		}
-
-		userRecord, err := s.store.FindUserByLogin(userSession.Login)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
-			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
-			return
-		}
-
+		userRecord := ctxUser(req.Context())
 		story := NewStory(title, body, userRecord.ID, url_)
 
 		err = s.store.InsertStory(story)
@@ -555,7 +529,7 @@ func (s *Server) HandleSubmitAction() httprouter.Handle {
 			return
 		}
 
-		story.Author = userSession.Login
+		story.Author = userRecord.Name
 
 		// HACK
 		for _, h := range s.storyHooks {
@@ -578,9 +552,9 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		res.Header().Set("Content-Type", "text/html")
 
-		userData := ctxUser(req.Context())
+		session := ctxSession(req.Context())
 		// redirect if unauthenticated
-		if userData == nil {
+		if session == nil {
 			http.Error(res, "Must be authenticated to submit comment", http.StatusUnauthorized)
 			return
 		}
@@ -600,20 +574,7 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 			http.Error(res, "Failed to parse form", http.StatusBadRequest)
 		}
 
-		// prepare the user
-		userSession, err := s.authService.CurrentUser(req)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to authenticate user")
-			http.Error(res, "Failed to authenticate user", http.StatusInternalServerError)
-			return
-		}
-
-		userRecord, err := s.store.FindUserByLogin(userSession.Login)
-		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
-			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
-			return
-		}
+		userRecord := ctxUser(req.Context())
 
 		var comment *Comment
 		body := strings.TrimSpace(req.FormValue("body"))
@@ -634,7 +595,7 @@ func (s *Server) HandleSubmitCommentAction() httprouter.Handle {
 		}
 
 		// HACK
-		comment.Author = userSession.Login
+		comment.Author = userRecord.Name
 		for _, h := range s.commentHooks {
 			err := h(story, comment)
 			if err != nil {
@@ -684,11 +645,7 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 			return
 		}
 
-		userData := ctxUser(req.Context())
-
-		// TODO deal with user not being authenticated
-
-		userRecord, err := s.store.FindUserByLogin(userData.Login)
+		userRecord := ctxUser(req.Context())
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -709,7 +666,6 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 
 		http.Redirect(res, req, redir, http.StatusFound)
 		s.Logger.Debug().Str("ref", req.Referer()).Msg("ss")
-		return
 	}
 }
 
@@ -732,9 +688,7 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 			return
 		}
 
-		userData := ctxUser(req.Context())
-
-		userRecord, err := s.store.FindUserByLogin(userData.Login)
+		userRecord := ctxUser(req.Context())
 		if err != nil {
 			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
@@ -749,7 +703,6 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 		}
 
 		http.Redirect(res, req, redir, http.StatusFound)
-		return
 	}
 }
 

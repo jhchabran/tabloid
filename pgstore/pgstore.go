@@ -1,6 +1,7 @@
 package pgstore
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/jhchabran/tabloid"
@@ -199,10 +200,16 @@ func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	return nil
 }
 
+// FindUserByLogin returns a User record by its name (so far, it's the Github handle).
+// If no user is found, it returns nil without an error.
 func (s *PGStore) FindUserByLogin(name string) (*tabloid.User, error) {
 	user := tabloid.User{}
 	err := s.db.Get(&user, "SELECT * FROM users WHERE name=$1", name)
+
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 

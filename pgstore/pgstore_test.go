@@ -86,4 +86,11 @@ func TestPGStore(t *testing.T) {
 		c.Assert(commentsWithVotes[0].UserID, qt.Equals, userB)
 		c.Assert(commentsWithVotes[0].Up, qt.Equals, sql.NullBool{Valid: true, Bool: true})
 	})
+
+	c.Run("Find non-existing user", func(c *qt.C) {
+		userRecord, err := store.FindUserByLogin("non-existing")
+		c.Assert(err, qt.IsNil)
+		c.Assert(userRecord, qt.IsNil)
+	})
+
 }

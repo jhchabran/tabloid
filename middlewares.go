@@ -98,14 +98,20 @@ func (s *Server) loadUserMiddleware() middleware {
 				return
 			}
 
-			user, err := s.store.FindUserByLogin(session.Login)
+			userRecord, err := s.store.FindUserByLogin(session.Login)
 			if err != nil {
 				s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
 				http.Error(w, "Failed to fetch user from database", http.StatusInternalServerError)
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), ctxKeyUser, user)
+			// there is a session but no user in the database, wiping the session
+			if userRecord == nil {
+				s.authService.Destroy(w, r)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), ctxKeyUser, userRecord)
 			next(w, r.WithContext(ctx), p)
 		})
 	}

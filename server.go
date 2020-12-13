@@ -224,6 +224,12 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 		return
 	}
 
+	if userRecord == nil {
+		// there is a session but no user in the database, wiping the session
+		s.authService.Destroy(res, req)
+		return
+	}
+
 	res.Header().Set("Content-Type", "text/html")
 
 	if req.Method != "GET" {

@@ -253,7 +253,7 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 	storyPresenters := []*storyPresenter{}
 	for i, st := range stories {
 		pos := 1 + i + (page * s.config.StoriesPerPage)
-		pr := newStoryPresenter(&st.Story, pos)
+		pr := newStoryPresenterWithPos(&st.Story, pos)
 		if st.Up.Valid && st.Up.Bool {
 			pr.Upvoted = true
 		} else {
@@ -315,7 +315,7 @@ func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.R
 	storyPresenters := []*storyPresenter{}
 	for i, st := range stories {
 		pos := 1 + i + (page * s.config.StoriesPerPage)
-		storyPresenters = append(storyPresenters, newStoryPresenter(st, pos))
+		storyPresenters = append(storyPresenters, newStoryPresenterWithPos(st, pos))
 	}
 
 	vars := map[string]interface{}{
@@ -478,7 +478,7 @@ func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 	commentsTree := NewCommentPresentersTree(cc)
 
 	err = tmpl.Execute(res, map[string]interface{}{
-		"Story":    story,
+		"Story":    newStoryPresenterWithBody(story),
 		"Comments": commentsTree,
 		"Session":  session,
 	})
@@ -731,7 +731,7 @@ type storyPresenter struct {
 	ID            string
 	Title         string
 	URL           string
-	Body          string
+	Body          template.HTML
 	Score         int
 	Author        string
 	AuthorID      string
@@ -740,13 +740,26 @@ type storyPresenter struct {
 	Upvoted       bool
 }
 
-func newStoryPresenter(story *Story, pos int) *storyPresenter {
+func newStoryPresenterWithPos(story *Story, pos int) *storyPresenter {
 	return &storyPresenter{
 		Pos:           pos,
 		ID:            story.ID,
 		Title:         story.Title,
 		URL:           story.URL,
-		Body:          story.Body,
+		Score:         story.Score,
+		Author:        story.Author,
+		AuthorID:      story.AuthorID,
+		CommentsCount: story.CommentsCount,
+		CreatedAt:     story.CreatedAt,
+	}
+}
+
+func newStoryPresenterWithBody(story *Story) *storyPresenter {
+	return &storyPresenter{
+		ID:            story.ID,
+		Title:         story.Title,
+		URL:           story.URL,
+		Body:          renderBody(story.Body),
 		Score:         story.Score,
 		Author:        story.Author,
 		AuthorID:      story.AuthorID,

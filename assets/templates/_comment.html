@@ -21,7 +21,7 @@
 		{{.Comment.Author}}, {{.Comment.Score}} point, {{.Comment.CreatedAt | daysAgo}}
 	{{end}}
 	</span>
-	<p class="comment-body mb-0" >{{.Comment.Body}}</p>
+	<div class="comment-body mb-0" >{{.Comment.Body}}</div>
 	<input class="trigger" id="{{.Comment.ID}}" type="checkbox">
 	<label class="story-meta text-secondary" for="{{.Comment.ID}}">Reply</label>
 	<div class="">

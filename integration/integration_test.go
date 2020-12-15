@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -368,8 +369,8 @@ func TestSubmitStory(t *testing.T) {
 
 		doc, err := goquery.NewDocumentFromReader(resp.Body)
 		c.Assert(err, qt.IsNil)
-		body := doc.Find("p.story-body").Text()
-		c.Assert(body, qt.Equals, "space\nnow")
+		body := doc.Find(".story-body").Text()
+		c.Assert(strings.TrimSpace(body), qt.Equals, "space\nnow")
 	})
 
 	c.Run("reject an invalid url when submitting a story", func(c *qt.C) {

@@ -144,67 +144,69 @@ func main() {
 
 	userFmt := func(uid string) string { return "<@" + uid + ">" }
 
-	s.AddStoryHook(func(story *tabloid.Story) error {
-		s.Logger.Debug().Msg("Adding a story hook")
-		uid, err := resolver.Resolve(story.Author)
-		if err != nil {
-			return err
-		}
-
-		_, _, err = api.PostMessage(cid, slack.MsgOptionText(
-			story.URL+
-				" submitted by "+
-				userFmt(uid)+
-				"\nComments "+
-				cfg.RootURL+
-				"/stories/"+
-				story.ID+
-				"/comments",
-			false))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
-
-	s.AddCommentHook(func(story *tabloid.Story, comment *tabloid.Comment) error {
-		s.Logger.Debug().Msg("Adding a comment hook")
-		uid, err := resolver.Resolve(comment.Author)
-		// TODO deal with not found usernames
-		if err != nil {
-			return err
-		}
-
-		var mentions string
-
-		if pings := comment.Pings(); len(pings) > 0 {
-			mentions = " , mentioning "
-			for _, name := range pings {
-				uid, err := resolver.Resolve(name)
-				if err != nil {
-					return err
-				}
-				mentions = mentions + userFmt(uid) + " "
+	if false {
+		s.AddStoryHook(func(story *tabloid.Story) error {
+			s.Logger.Debug().Msg("Adding a story hook")
+			uid, err := resolver.Resolve(story.Author)
+			if err != nil {
+				return err
 			}
-		}
 
-		_, _, err = api.PostMessage(cid, slack.MsgOptionText(
-			"Comment submitted by "+
-				userFmt(uid)+
-				" on \""+
-				story.Title+
-				"\": "+
-				cfg.RootURL+
-				"/stories/"+
-				story.ID+
-				"/comments"+
-				mentions,
-			false))
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+			_, _, err = api.PostMessage(cid, slack.MsgOptionText(
+				story.URL+
+					" submitted by "+
+					userFmt(uid)+
+					"\nComments "+
+					cfg.RootURL+
+					"/stories/"+
+					story.ID+
+					"/comments",
+				false))
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+
+		s.AddCommentHook(func(story *tabloid.Story, comment *tabloid.Comment) error {
+			s.Logger.Debug().Msg("Adding a comment hook")
+			uid, err := resolver.Resolve(comment.Author)
+			// TODO deal with not found usernames
+			if err != nil {
+				return err
+			}
+
+			var mentions string
+
+			if pings := comment.Pings(); len(pings) > 0 {
+				mentions = " , mentioning "
+				for _, name := range pings {
+					uid, err := resolver.Resolve(name)
+					if err != nil {
+						return err
+					}
+					mentions = mentions + userFmt(uid) + " "
+				}
+			}
+
+			_, _, err = api.PostMessage(cid, slack.MsgOptionText(
+				"Comment submitted by "+
+					userFmt(uid)+
+					" on \""+
+					story.Title+
+					"\": "+
+					cfg.RootURL+
+					"/stories/"+
+					story.ID+
+					"/comments"+
+					mentions,
+				false))
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+	}
 
 	// Prepare and start the server
 	err = s.Prepare()

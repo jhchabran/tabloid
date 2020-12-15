@@ -2,6 +2,7 @@ package tabloid
 
 import (
 	"database/sql"
+	"html/template"
 	"regexp"
 	"time"
 )
@@ -57,7 +58,7 @@ type CommentPresenter struct {
 	Path       string
 	ParentPath string
 	StoryPath  string
-	Body       string
+	Body       template.HTML
 	Score      int64
 	Author     string
 	CreatedAt  time.Time
@@ -137,7 +138,7 @@ func NewCommentPresenter(c *CommentNode) *CommentPresenter {
 		return &CommentPresenter{
 			ID:        comment.ID,
 			StoryID:   comment.StoryID,
-			Body:      comment.Body,
+			Body:      renderBody(comment.Body),
 			Score:     comment.Score,
 			Author:    comment.Author,
 			CreatedAt: comment.CreatedAt,
@@ -149,7 +150,7 @@ func NewCommentPresenter(c *CommentNode) *CommentPresenter {
 		return &CommentPresenter{
 			ID:        comment.ID,
 			StoryID:   comment.StoryID,
-			Body:      comment.Body,
+			Body:      renderBody(comment.Body),
 			Score:     comment.Score,
 			Author:    comment.Author,
 			CreatedAt: comment.CreatedAt,

@@ -19,6 +19,7 @@ require (
 	github.com/rs/zerolog v1.19.0
 	github.com/slack-go/slack v0.7.2
 	github.com/stretchr/testify v1.5.1 // indirect
+	github.com/yuin/goldmark v1.3.0
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect

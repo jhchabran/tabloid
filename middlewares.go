@@ -1,8 +1,12 @@
 package tabloid
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"io/ioutil"
 	"net/http"
+	"strings"
 
 	"github.com/jhchabran/tabloid/authentication"
 	"github.com/julienschmidt/httprouter"
@@ -115,4 +119,58 @@ func (s *Server) loadUserMiddleware() middleware {
 			next(w, r.WithContext(ctx), p)
 		})
 	}
+}
+
+func (s *Server) httpVerbFormUnwrapper(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		// if we have a POST method, we need to read the body to get to the form field name "_method", in order to
+		// swap the http method for the request. Because req.ParseForm() consumes the body, we have to save it
+		// and pass new one to the next middleware.
+		if req.Method == http.MethodPost {
+			// save the original body and let's make sure we don't blow up on a huge body (do what req.ParseForm()
+			// is doing basically).
+			maxFormSize := int64(10 << 20) // 10 MB is a lot of text.
+			reader := io.LimitReader(req.Body, maxFormSize+1)
+			body, err := ioutil.ReadAll(reader)
+			defer req.Body.Close()
+
+			if err != nil {
+				s.Logger.Error().Err(err).Msg("can't read request body")
+				http.Error(res, "", http.StatusBadRequest)
+				return
+			}
+
+			if int64(len(body)) > maxFormSize {
+				s.Logger.Warn().Msg("http: POST too large")
+				http.Error(res, "http: POST too large", http.StatusBadRequest)
+				return
+			}
+
+			// req.ParseForm() consumes req.Body, so we need to give it one.
+			req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+			err = req.ParseForm()
+			if err != nil {
+				http.Error(res, "", http.StatusBadRequest)
+			}
+			method := req.Form.Get("_method")
+
+			switch strings.ToUpper(method) {
+			case "PUT":
+				req.Method = http.MethodPut
+			case "PATCH":
+				req.Method = http.MethodPatch
+			case "DELETE":
+				req.Method = http.MethodPatch
+			case "POST":
+			case "":
+			default:
+				http.Error(res, "", http.StatusBadRequest)
+			}
+
+			req.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+		}
+
+		next.ServeHTTP(res, req)
+	})
 }

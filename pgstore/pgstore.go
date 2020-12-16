@@ -2,12 +2,15 @@ package pgstore
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
 	"github.com/jhchabran/tabloid"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
+
+var recordNotFoundError = errors.New("record not found")
 
 // A PGStore is responsible of interacting with the storage layer using a Postgresql database.
 type PGStore struct {
@@ -196,6 +199,28 @@ func (s *PGStore) InsertComment(comment *tabloid.Comment) error {
 	// we don't need to re-read from the database, it's the story creation, it can only have one upvote, the one
 	// from the author, added by a trigger on the upvote table
 	comment.Score = 1
+
+	return nil
+}
+
+func (s *PGStore) UpdateComment(comment *tabloid.Comment) error {
+	res, err := s.db.Exec(
+		"UPDATE comments SET story_id = $1, parent_comment_id = $2, body = $3, author_id = $4, created_at = $5 WHERE id=$6",
+		comment.StoryID, comment.ParentCommentID, comment.Body, comment.AuthorID, comment.CreatedAt, comment.ID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count != 1 {
+		return recordNotFoundError
+	}
 
 	return nil
 }

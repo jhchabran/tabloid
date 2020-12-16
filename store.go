@@ -10,6 +10,7 @@ type Store interface {
 	ListComments(storyID string) ([]*Comment, error)
 	ListCommentsWithVotes(storyID string, userID string) ([]*CommentSeenByUser, error)
 	InsertComment(comment *Comment) error
+	UpdateComment(comment *Comment) error
 	FindUserByLogin(login string) (*User, error)
 	CreateOrUpdateUser(login string, email string) (string, error)
 	CreateOrUpdateVoteOnStory(storyID string, userID string, up bool) error

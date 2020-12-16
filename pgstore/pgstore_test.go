@@ -93,4 +93,30 @@ func TestPGStore(t *testing.T) {
 		c.Assert(userRecord, qt.IsNil)
 	})
 
+	c.Run("Updating a comment", func(c *qt.C) {
+		c.Run("OK", func(c *qt.C) {
+			c.Cleanup(func() {
+				store.DB().MustExec("TRUNCATE TABLE stories;")
+				store.DB().MustExec("TRUNCATE TABLE comments;")
+				store.DB().MustExec("TRUNCATE TABLE users;")
+				store.DB().MustExec("TRUNCATE TABLE votes;")
+			})
+
+			comment := tabloid.NewComment("1", sql.NullString{String: "Foo"}, "foobar", "1")
+			err := store.InsertComment(comment)
+			c.Assert(err, qt.IsNil)
+
+			comment.Body = "Bar"
+			err = store.UpdateComment(comment)
+			c.Assert(err, qt.IsNil)
+		})
+
+		c.Run("non existing comment", func(c *qt.C) {
+			comment := tabloid.NewComment("1", sql.NullString{String: "Foo"}, "foobar", "1")
+			comment.ID = "666"
+			err := store.UpdateComment(comment)
+			c.Assert(err, qt.Equals, recordNotFoundError)
+		})
+	})
+
 }

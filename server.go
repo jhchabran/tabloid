@@ -67,6 +67,7 @@ func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authSer
 
 	// Those are top level middewares, set before the router; every requests will go through them.
 	middlewares := []httpMiddleware{
+		s.httpVerbFormUnwrapper,
 		hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
 			hlog.FromRequest(r).Info().
 				Str("method", r.Method).
@@ -116,6 +117,8 @@ func (s *Server) Prepare() error {
 		s.router.POST("/stories/:id/comments", m(s.HandleSubmitCommentAction()))
 		s.router.POST("/stories/:id/votes", m(s.HandleVoteStoryAction()))
 		s.router.POST("/story/:story_id/comments/:id/votes", m(s.HandleVoteCommentAction()))
+		s.router.GET("/story/:story_id/comments/:id/edit", m(s.HandleCommentEdit()))
+		s.router.PUT("/story/:story_id/comments/:id", m(s.HandleCommentUpdateAction()))
 	}, s.loadSessionMiddleware(), s.loadUserMiddleware())
 
 	s.router.ServeFiles("/static/*filepath", http.Dir("assets/static"))
@@ -277,7 +280,6 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 		http.Error(res, "Failed to list stories", http.StatusInternalServerError)
 		return
 	}
-	s.Logger.Warn().Msgf("len=%v", len(nextPageStories))
 	if len(nextPageStories) == 0 {
 		vars["NextPage"] = -1
 	}
@@ -631,13 +633,6 @@ func (s *Server) HandleVoteCommentAction() httprouter.Handle {
 		storyID := params.ByName("story_id")
 		_, err = s.store.FindStory(storyID)
 		if err != nil {
-			s.Logger.Error().Err(err).Msg("Failed to find story")
-			http.Error(res, "Failed to find story", http.StatusNotFound)
-			return
-		}
-
-		_, err = s.store.FindStory(storyID)
-		if err != nil {
 			http.Error(res, "Story Not found", http.StatusNotFound)
 			return
 		}
@@ -709,6 +704,118 @@ func (s *Server) HandleVoteStoryAction() httprouter.Handle {
 		}
 
 		http.Redirect(res, req, redir, http.StatusFound)
+	}
+}
+
+func (s *Server) HandleCommentEdit() httprouter.Handle {
+	tmpl, err := template.New("edit.html").Funcs(helpers).ParseFiles(
+		"assets/templates/edit.html",
+		"assets/templates/_header.html",
+		"assets/templates/_footer.html")
+	if err != nil {
+		s.Logger.Fatal().Err(err).Msg("Failed to parse template")
+	}
+
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		res.Header().Set("Content-Type", "text/html")
+		session := ctxSession(req.Context())
+		userRecord := ctxUser(req.Context())
+
+		storyID := params.ByName("story_id")
+		_, err := s.store.FindStory(storyID)
+		if err != nil {
+			http.Error(res, "Failed to find story", http.StatusNotFound)
+			return
+		}
+
+		story, err := s.store.FindStory(storyID)
+		if err != nil {
+			http.Error(res, "Story Not found", http.StatusNotFound)
+			return
+		}
+
+		id := params.ByName("id")
+		comment, err := s.store.FindComment(id)
+		if err != nil {
+			s.Logger.Debug().Err(err).Msg("comment")
+			http.Error(res, "Comment Not found", http.StatusNotFound)
+			return
+		}
+
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
+			return
+		}
+
+		// Cannot edit comments that aren't yours.
+		if comment.AuthorID != userRecord.ID {
+			http.Redirect(res, req, "/", http.StatusFound)
+			return
+		}
+
+		vars := map[string]interface{}{
+			"Session": session,
+			"Comment": comment,
+			"Story":   story,
+		}
+
+		err = tmpl.Execute(res, vars)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to render template")
+			http.Error(res, "Failed to render template", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func (s *Server) HandleCommentUpdateAction() httprouter.Handle {
+	return func(res http.ResponseWriter, req *http.Request, params httprouter.Params) {
+		userRecord := ctxUser(req.Context())
+
+		storyID := params.ByName("story_id")
+		_, err := s.store.FindStory(storyID)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to find story")
+			http.Error(res, "Failed to find story", http.StatusNotFound)
+			return
+		}
+
+		id := params.ByName("id")
+		comment, err := s.store.FindComment(id)
+		if err != nil {
+			s.Logger.Debug().Err(err).Msg("comment")
+			http.Error(res, "Comment Not found", http.StatusNotFound)
+			return
+		}
+
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
+			http.Error(res, "Failed to fetch user from database", http.StatusInternalServerError)
+			return
+		}
+
+		// Cannot edit comments that aren't yours.
+		if comment.AuthorID != userRecord.ID {
+			http.Redirect(res, req, "/", http.StatusFound)
+			return
+		}
+
+		err = req.ParseForm()
+		if err != nil {
+			http.Error(res, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		comment.Body = req.Form.Get("body")
+		err = s.store.UpdateComment(comment)
+		if err != nil {
+			s.Logger.Error().Err(err).Msg("can't update comment in db")
+			http.Error(res, "Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		http.Redirect(res, req, "/stories/"+storyID+"/comments", http.StatusFound)
 	}
 }
 

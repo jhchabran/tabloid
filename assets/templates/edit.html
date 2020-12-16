@@ -1,0 +1,20 @@
+{{template "header" .}}
+
+<h1> Edit comment </h1>
+
+<form action="/story/{{.Comment.StoryID}}/comments/{{.Comment.ID}}" method="POST" class="edit-comment-form" autocomplete="off">
+    <input type="hidden" name="_method" value="PUT" />
+	<div class="row mb-3">
+		<div class="col-sm-6">
+			<textarea class="form-control" name="body" id="body" rows="4">{{.Comment.Body}}</textarea>
+		</div>
+	</div>
+
+	<div class="row mb-3">
+		<div class="col-sm-6">
+			<input class="btn btn-primary" type="submit" value="Submit">
+		</div>
+	</div>
+</form>
+
+{{template "footer"}}

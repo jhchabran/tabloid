@@ -23,7 +23,7 @@
 	</span>
 	<div class="comment-body mb-0" >{{.Comment.Body}}</div>
 	{{ if .Session }}
-	{{ if eq .Comment.Author .Session.Login }}
+	{{ if .Comment.CanEdit }}
 	<a class="comment-edit story-meta text-secondary comment-footer" href="/story/{{.Comment.StoryID}}/comments/{{.Comment.ID}}/edit">Edit</a>
 	{{end}}
 	{{end}}

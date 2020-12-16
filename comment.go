@@ -64,6 +64,13 @@ type CommentPresenter struct {
 	CreatedAt  time.Time
 	Children   []*CommentPresenter
 	Upvoted    bool
+	CanEdit    bool
+}
+
+// CanEdit returns true if the given user is the author and if the creation date is still within
+// the given edit window.
+func (c *CommentPresenter) SetCanEdit(userName string, editWindow time.Duration, at time.Time) {
+	c.CanEdit = userName == c.Author && c.CreatedAt.Add(editWindow).After(at)
 }
 
 // CommentTree is a simple tree of comments ordered by score
@@ -72,8 +79,22 @@ type CommentNode struct {
 	Children []*CommentNode
 }
 
+type CommentPresentersTree []*CommentPresenter
+
+func (t CommentPresentersTree) SetCanEdits(userName string, editWindow time.Duration, at time.Time) {
+	for children := t; len(children) > 0; {
+		next := []*CommentPresenter{}
+		for _, c := range children {
+			c.SetCanEdit(userName, editWindow, at)
+			next = append(next, c.Children...)
+		}
+
+		children = next
+	}
+}
+
 // TODO ordering?
-func NewCommentPresentersTree(comments []CommentAccessor) []*CommentPresenter {
+func NewCommentPresentersTree(comments []CommentAccessor) CommentPresentersTree {
 	index := map[sql.NullString]*CommentNode{}
 	var roots []*CommentNode
 

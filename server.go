@@ -44,8 +44,9 @@ type Server struct {
 
 // ServerConfig represents the settings required for the server to operate.
 type ServerConfig struct {
-	Addr           string
-	StoriesPerPage int
+	Addr                string
+	StoriesPerPage      int
+	EditWindowInMinutes int
 }
 
 func init() {
@@ -478,6 +479,7 @@ func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 		cc[i] = c
 	}
 	commentsTree := NewCommentPresentersTree(cc)
+	commentsTree.SetCanEdits(userRecord.Name, time.Duration(s.config.EditWindowInMinutes)*time.Minute, NowFunc())
 
 	err = tmpl.Execute(res, map[string]interface{}{
 		"Story":    newStoryPresenterWithBody(story),
@@ -751,6 +753,13 @@ func (s *Server) HandleCommentEdit() httprouter.Handle {
 		// Cannot edit comments that aren't yours.
 		if comment.AuthorID != userRecord.ID {
 			http.Redirect(res, req, "/", http.StatusFound)
+			return
+		}
+
+		// If comment is older than edit window, let's redirect
+		editWindow := time.Duration(s.config.EditWindowInMinutes) * time.Minute
+		if comment.CreatedAt.Add(editWindow).Before(NowFunc()) {
+			http.Redirect(res, req, "/stories/"+story.ID+"/comments", http.StatusFound)
 			return
 		}
 

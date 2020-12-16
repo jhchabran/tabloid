@@ -113,7 +113,11 @@ func main() {
 	authService := github_auth.New(cfg.ServerSecret, cfg.GithubClientID, cfg.GithubClientSecret, ll)
 
 	// create the server
-	s := tabloid.NewServer(&tabloid.ServerConfig{Addr: cfg.Addr, StoriesPerPage: cfg.StoriesPerPage}, logger, pg, authService)
+	s := tabloid.NewServer(&tabloid.ServerConfig{
+		Addr:                cfg.Addr,
+		StoriesPerPage:      cfg.StoriesPerPage,
+		EditWindowInMinutes: cfg.EditWindowInMinutes,
+	}, logger, pg, authService)
 
 	// create the slack client; needed scope channel list, user list, post messages
 	slackToken := os.Getenv("SLACK_TOKEN")

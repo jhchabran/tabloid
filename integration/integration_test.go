@@ -846,6 +846,42 @@ func TestCommentsEditing(t *testing.T) {
 		defer resp.Body.Close()
 		c.Assert(resp.StatusCode, qt.Equals, 401)
 	})
+
+	c.Run("redirects if trying to edit after edit window", func(c *qt.C) {
+		oldNowFunc := tabloid.NowFunc
+		tabloid.NowFunc = func() time.Time { return oldNowFunc().Add(100 * time.Hour) } // warp in 100h
+		defer func() { tabloid.NowFunc = oldNowFunc }()
+
+		// get to that page
+		resp, err = client.Get(tc.url(editPath))
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		_, ok = doc.Find("form.edit-comment-form").First().Attr("action")
+		c.Assert(ok, qt.IsFalse)
+	})
+
+	c.Run("edit link isn't shown if comment is out of edit window", func(c *qt.C) {
+		oldNowFunc := tabloid.NowFunc
+		tabloid.NowFunc = func() time.Time { return oldNowFunc().Add(100 * time.Hour) } // warp in 100h
+		defer func() { tabloid.NowFunc = oldNowFunc }()
+
+		// go to the story page
+		resp, err = client.Get(tc.url(storyPath))
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		_, ok := doc.Find("a.comment-edit").First().Attr("href")
+		c.Assert(ok, qt.IsFalse)
+	})
 }
 
 func TestCommentsVoting(t *testing.T) {

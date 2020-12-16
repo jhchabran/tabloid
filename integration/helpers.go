@@ -61,7 +61,7 @@ func newTestContext(c *qt.C) *testContext {
 	fakeAuth := fake_auth.New(sessionStore, logger)
 
 	tc.server = tabloid.NewServer(
-		&tabloid.ServerConfig{Addr: testServerHost, StoriesPerPage: 3},
+		&tabloid.ServerConfig{Addr: testServerHost, StoriesPerPage: 3, EditWindowInMinutes: 60},
 		logger,
 		tc.pgStore,
 		fakeAuth,

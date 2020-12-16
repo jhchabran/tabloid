@@ -76,3 +76,11 @@ ul.comments-tree {
 ul.comments-tree li {
   list-style: none;
 }
+
+/* these are the links at the bottom of a comment. Because comments are wrapped into a p, we need
+ * do compensate its bottom padding.
+*/
+.comment-footer {
+  position: relative;
+  top: -1rem; /* the p bottom-padding value */
+}

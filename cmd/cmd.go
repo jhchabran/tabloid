@@ -12,32 +12,34 @@ import (
 )
 
 type Config struct {
-	LogLevel           string `json:"log_level"`
-	LogFormat          string `json:"log_format"`
-	DatabaseName       string `json:"database_name"`
-	DatabaseUser       string `json:"database_user"`
-	DatabaseHost       string `json:"database_host"`
-	DatabasePassword   string `json:"database_password"`
-	DatabaseURL        string `json:"database_url"`
-	GithubClientID     string `json:"github_client_id"`
-	GithubClientSecret string `json:"github_client_secret"`
-	ServerSecret       string `json:"server_secret"`
-	StoriesPerPage     int    `json:"stories_per_page"`
-	Addr               string `json:"addr"`
-	RootURL            string `json:"root_url"`
+	LogLevel            string `json:"log_level"`
+	LogFormat           string `json:"log_format"`
+	DatabaseName        string `json:"database_name"`
+	DatabaseUser        string `json:"database_user"`
+	DatabaseHost        string `json:"database_host"`
+	DatabasePassword    string `json:"database_password"`
+	DatabaseURL         string `json:"database_url"`
+	GithubClientID      string `json:"github_client_id"`
+	GithubClientSecret  string `json:"github_client_secret"`
+	ServerSecret        string `json:"server_secret"`
+	StoriesPerPage      int    `json:"stories_per_page"`
+	EditWindowInMinutes int    `json:"edit_window_in_minutes"`
+	Addr                string `json:"addr"`
+	RootURL             string `json:"root_url"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		LogLevel:         "info",
-		LogFormat:        "json",
-		DatabaseName:     "tabloid",
-		DatabaseUser:     "postgres",
-		DatabasePassword: "postgres",
-		DatabaseHost:     "127.0.0.1",
-		StoriesPerPage:   10,
-		Addr:             "localhost:8080",
-		RootURL:          "http://localhost:8080",
+		LogLevel:            "info",
+		LogFormat:           "json",
+		DatabaseName:        "tabloid",
+		DatabaseUser:        "postgres",
+		DatabasePassword:    "postgres",
+		DatabaseHost:        "127.0.0.1",
+		StoriesPerPage:      10,
+		EditWindowInMinutes: 60,
+		Addr:                "localhost:8080",
+		RootURL:             "http://localhost:8080",
 	}
 }
 
@@ -112,6 +114,16 @@ func (c *Config) Load() error {
 		}
 
 		c.StoriesPerPage = vi
+	}
+
+	v = os.Getenv("EDIT_WINDOW_IN_MINUTES")
+	if v != "" {
+		vi, err := strconv.Atoi(v)
+		if err != nil {
+			return err
+		}
+
+		c.EditWindowInMinutes = vi
 	}
 
 	v = os.Getenv("ADDR")

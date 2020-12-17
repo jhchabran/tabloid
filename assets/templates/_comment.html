@@ -22,15 +22,20 @@
 	{{end}}
 	</span>
 	<div class="comment-body mb-0" >{{.Comment.Body}}</div>
+	{{ if .Session }}
+	{{ if .Comment.CanEdit }}
+	<a class="comment-edit story-meta text-secondary comment-footer" href="/story/{{.Comment.StoryID}}/comments/{{.Comment.ID}}/edit">Edit</a>
+	{{end}}
+	{{end}}
 	<input class="trigger" id="{{.Comment.ID}}" type="checkbox">
-	<label class="story-meta text-secondary" for="{{.Comment.ID}}">Reply</label>
+	<label class="story-meta text-secondary reply-link comment-footer" for="{{.Comment.ID}}">Reply</label>
 	<div class="">
 		{{template "comment_form" dict "Comment" .Comment "Session" .Session}}
 	</div>
 
 	<ul class="comments">
 		{{range .Comment.Children}}
-		{{template "comment" dict "Comment" . "Session" $.Session}}
+			{{template "comment" dict "Comment" . "Session" $.Session}}
 		{{end}}
 	</ul>
 </li>

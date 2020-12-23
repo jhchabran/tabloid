@@ -24,8 +24,6 @@ type Handler struct {
 	// useless atm, but keeping around to dig around whatever I could need
 	// at this stage.
 	sessionStore *sessions.CookieStore
-	clientID     string
-	clientSecret string
 	logger       zerolog.Logger
 	oauthConfig  *oauth2.Config
 }
@@ -59,7 +57,7 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 	}
 
 	userData := map[string]interface{}{}
-	client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, accessToken))
+	client := github.NewClient(h.oauthConfig.Client(context.Background(), accessToken))
 
 	user, _, err := client.Users.Get(context.Background(), "")
 	if err != nil {
@@ -75,7 +73,10 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 	userData["User"] = user
 
 	var userMap map[string]interface{}
-	mapstructure.Decode(user, &userMap)
+	err = mapstructure.Decode(user, &userMap)
+	if err != nil {
+		return nil, err
+	}
 	userData["UserMap"] = userMap
 
 	b, err := json.Marshal(userSession)
@@ -114,7 +115,11 @@ func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
 
 func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 	b := make([]byte, 16)
-	rand.Read(b)
+	_, err := rand.Read(b)
+	if err != nil {
+		http.Error(res, "", http.StatusInternalServerError)
+		return
+	}
 
 	state := base64.URLEncoding.EncodeToString(b)
 
@@ -138,7 +143,7 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWri
 		return
 	}
 
-	token, err := h.oauthConfig.Exchange(oauth2.NoContext, req.URL.Query().Get("code"))
+	token, err := h.oauthConfig.Exchange(context.Background(), req.URL.Query().Get("code"))
 	if err != nil {
 		http.Error(res, "there was an issue getting your token", http.StatusInternalServerError)
 		return
@@ -177,7 +182,11 @@ func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 	// kill the session
 	session.Options.MaxAge = -1
 	session.Values["user"] = nil // TODO max age probably makes this unnecessary
-	session.Save(req, res)
+	err = session.Save(req, res)
+	if err != nil {
+		http.Error(res, "can't save session", http.StatusInternalServerError)
+		return
+	}
 
 	http.Redirect(res, req, "/", 302)
 }

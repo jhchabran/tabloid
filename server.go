@@ -177,7 +177,7 @@ func (s *Server) HandleOAuthCallback() httprouter.Handle {
 		// need to think about error handling here
 		// probably a before write callback is good enough?
 		s.authService.Callback(res, req, func(u *authentication.User) error {
-			_, err := s.store.CreateOrUpdateUser(u.Login, "email")
+			_, err := s.store.CreateOrUpdateUser(u.Login, u.Email)
 			return err
 		})
 	}

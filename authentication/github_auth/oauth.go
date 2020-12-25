@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
-	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
@@ -38,7 +37,7 @@ func New(serverSecret string, clientID string, clientSecret string, logger zerol
 			TokenURL: "https://github.com/login/oauth/access_token",
 		},
 		RedirectURL: "",
-		Scopes:      []string{"email"},
+		Scopes:      []string{"user:email"},
 	}
 	return &Handler{
 		sessionStore: sessionStore,
@@ -56,7 +55,6 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 		return nil, err
 	}
 
-	userData := map[string]interface{}{}
 	client := github.NewClient(h.oauthConfig.Client(context.Background(), accessToken))
 
 	user, _, err := client.Users.Get(context.Background(), "")
@@ -67,17 +65,13 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 	userSession := &authentication.User{
 		Login:     *user.Login,
 		AvatarURL: *user.AvatarURL,
-		// No reason to store the token for now
 	}
 
-	userData["User"] = user
-
-	var userMap map[string]interface{}
-	err = mapstructure.Decode(user, &userMap)
-	if err != nil {
-		return nil, err
+	// email can be defined as private in Github, and if that's the case
+	// this field will be nil.
+	if user.Email != nil {
+		userSession.Email = *user.Email
 	}
-	userData["UserMap"] = userMap
 
 	b, err := json.Marshal(userSession)
 	if err != nil {
@@ -125,7 +119,11 @@ func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 
 	session, _ := h.sessionStore.Get(req, sessionKey)
 	session.Values["state"] = state
-	session.Save(req, res)
+	err = session.Save(req, res)
+	if err != nil {
+		http.Error(res, "can't save session", http.StatusInternalServerError)
+		return
+	}
 
 	url := h.oauthConfig.AuthCodeURL(state)
 	http.Redirect(res, req, url, 302)

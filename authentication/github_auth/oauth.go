@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
 	"github.com/jhchabran/tabloid/authentication"
-	"github.com/mitchellh/mapstructure"
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
 )
@@ -24,8 +23,6 @@ type Handler struct {
 	// useless atm, but keeping around to dig around whatever I could need
 	// at this stage.
 	sessionStore *sessions.CookieStore
-	clientID     string
-	clientSecret string
 	logger       zerolog.Logger
 	oauthConfig  *oauth2.Config
 }
@@ -40,7 +37,7 @@ func New(serverSecret string, clientID string, clientSecret string, logger zerol
 			TokenURL: "https://github.com/login/oauth/access_token",
 		},
 		RedirectURL: "",
-		Scopes:      []string{"email"},
+		Scopes:      []string{"user:email"},
 	}
 	return &Handler{
 		sessionStore: sessionStore,
@@ -58,8 +55,7 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 		return nil, err
 	}
 
-	userData := map[string]interface{}{}
-	client := github.NewClient(h.oauthConfig.Client(oauth2.NoContext, accessToken))
+	client := github.NewClient(h.oauthConfig.Client(context.Background(), accessToken))
 
 	user, _, err := client.Users.Get(context.Background(), "")
 	if err != nil {
@@ -69,14 +65,13 @@ func (h *Handler) LoadUserData(accessToken *oauth2.Token, req *http.Request, res
 	userSession := &authentication.User{
 		Login:     *user.Login,
 		AvatarURL: *user.AvatarURL,
-		// No reason to store the token for now
 	}
 
-	userData["User"] = user
-
-	var userMap map[string]interface{}
-	mapstructure.Decode(user, &userMap)
-	userData["UserMap"] = userMap
+	// email can be defined as private in Github, and if that's the case
+	// this field will be nil.
+	if user.Email != nil {
+		userSession.Email = *user.Email
+	}
 
 	b, err := json.Marshal(userSession)
 	if err != nil {
@@ -114,13 +109,21 @@ func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
 
 func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 	b := make([]byte, 16)
-	rand.Read(b)
+	_, err := rand.Read(b)
+	if err != nil {
+		http.Error(res, "", http.StatusInternalServerError)
+		return
+	}
 
 	state := base64.URLEncoding.EncodeToString(b)
 
 	session, _ := h.sessionStore.Get(req, sessionKey)
 	session.Values["state"] = state
-	session.Save(req, res)
+	err = session.Save(req, res)
+	if err != nil {
+		http.Error(res, "can't save session", http.StatusInternalServerError)
+		return
+	}
 
 	url := h.oauthConfig.AuthCodeURL(state)
 	http.Redirect(res, req, url, 302)
@@ -138,7 +141,7 @@ func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWri
 		return
 	}
 
-	token, err := h.oauthConfig.Exchange(oauth2.NoContext, req.URL.Query().Get("code"))
+	token, err := h.oauthConfig.Exchange(context.Background(), req.URL.Query().Get("code"))
 	if err != nil {
 		http.Error(res, "there was an issue getting your token", http.StatusInternalServerError)
 		return
@@ -177,7 +180,11 @@ func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 	// kill the session
 	session.Options.MaxAge = -1
 	session.Values["user"] = nil // TODO max age probably makes this unnecessary
-	session.Save(req, res)
+	err = session.Save(req, res)
+	if err != nil {
+		http.Error(res, "can't save session", http.StatusInternalServerError)
+		return
+	}
 
 	http.Redirect(res, req, "/", 302)
 }

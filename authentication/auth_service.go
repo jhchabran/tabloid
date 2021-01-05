@@ -25,6 +25,7 @@ type AuthService interface {
 type User struct {
 	AvatarURL string
 	Login     string
+	Email     string
 	// No reason to store the token for now
 	// AccessToken *oauth2.Token
 }

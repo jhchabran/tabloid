@@ -254,6 +254,28 @@ func (s *PGStore) CreateOrUpdateUser(login string, email string) (string, error)
 	return id, nil
 }
 
+func (s *PGStore) UpdateUser(user *tabloid.User) error {
+	res, err := s.db.Exec(
+		"UPDATE users SET name = $1, email = $2, created_at = $3, last_login_at = $4, settings = $5 WHERE id=$6",
+		user.Name, user.Email, user.CreatedAt, user.LastLoginAt, user.Settings, user.ID,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	count, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if count != 1 {
+		return recordNotFoundError
+	}
+
+	return nil
+}
+
 func (s *PGStore) CreateOrUpdateVoteOnStory(storyID string, userID string, up bool) error {
 	now := time.Now()
 	_, err := s.db.Exec("INSERT INTO votes (story_id, user_id, up, created_at) VALUES ($1, $2, $3, $4) ON CONFlICT (user_id, story_id) WHERE comment_id IS NULL DO UPDATE SET up = $5",

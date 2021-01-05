@@ -119,4 +119,62 @@ func TestPGStore(t *testing.T) {
 		})
 	})
 
+	c.Run("Getting a user", func(c *qt.C) {
+		c.Cleanup(func() {
+			store.DB().MustExec("TRUNCATE TABLE users;")
+		})
+
+		store.DB().MustExec("INSERT INTO users (name, email, settings, created_at, last_login_at) VALUES ($1, $2, $3, $4, $5)",
+			"foobar",
+			"foobar@foobar.com",
+			tabloid.UserSettings{SendDailyDigest: true},
+			tabloid.NowFunc(),
+			tabloid.NowFunc())
+
+		c.Run("OK", func(c *qt.C) {
+			user, err := store.FindUserByLogin("foobar")
+			c.Assert(err, qt.IsNil)
+			c.Assert(user, qt.Not(qt.IsNil))
+		})
+
+		c.Run("OK Settings", func(c *qt.C) {
+			user, err := store.FindUserByLogin("foobar")
+			c.Assert(err, qt.IsNil)
+			c.Assert(user.Settings.SendDailyDigest, qt.IsTrue)
+		})
+	})
+
+	c.Run("Updating a user", func(c *qt.C) {
+		c.Cleanup(func() {
+			store.DB().MustExec("TRUNCATE TABLE users;")
+		})
+
+		store.DB().MustExec("INSERT INTO users (name, email, settings, created_at, last_login_at) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+			"foobar",
+			"foobar@foobar.com",
+			tabloid.UserSettings{SendDailyDigest: true},
+			tabloid.NowFunc(),
+			tabloid.NowFunc(),
+		)
+
+		c.Run("OK", func(c *qt.C) {
+			user, err := store.FindUserByLogin("foobar")
+			c.Assert(err, qt.IsNil)
+
+			// changing some setting and email
+			user.Settings.SendDailyDigest = false
+			user.Email = "barfoo@foobar.com"
+
+			err = store.UpdateUser(user)
+			c.Assert(err, qt.IsNil)
+
+			// load the user from db again
+			user, err = store.FindUserByLogin("foobar")
+			c.Assert(err, qt.IsNil)
+
+			c.Assert(user.Email, qt.Equals, "barfoo@foobar.com")
+			c.Assert(user.Settings.SendDailyDigest, qt.IsFalse)
+		})
+
+	})
 }

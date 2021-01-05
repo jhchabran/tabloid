@@ -15,4 +15,5 @@ type Store interface {
 	CreateOrUpdateUser(login string, email string) (string, error)
 	CreateOrUpdateVoteOnStory(storyID string, userID string, up bool) error
 	CreateOrUpdateVoteOnComment(storyID string, userID string, up bool) error
+	UpdateUser(user *User) error
 }

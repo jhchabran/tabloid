@@ -15,7 +15,11 @@
   {{else}}
   <a href="/oauth/start" class="voters-inactive"><img src="/static/grayarrow2x.gif" /></a>
   {{end}}
+  {{if .Story.IsSelfPost}}
+  <a class="story-url" href="/stories/{{.Story.ID}}/comments">{{.Story.Title | title}}</a>
+  {{else}}
   <a class="story-url" href="{{.Story.URL}}">{{.Story.Title | title}}</a>
+  {{end}}
   <br/>
 
   <span class="story-meta text-secondary pl-2">

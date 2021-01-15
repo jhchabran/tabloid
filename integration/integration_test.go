@@ -57,6 +57,36 @@ func TestIndexPage(t *testing.T) {
 		c.Assert(text, qt.Equals, "Foobar")
 	})
 
+	c.Run("OK self post link sends to comments", func(c *qt.C) {
+		tc := newTestContext(c)
+		tc.prepareServer()
+
+		id, err := tc.createUser("alpha")
+		c.Assert(err, qt.IsNil)
+
+		story := tabloid.Story{
+			Title:     "self Foobar",
+			Body:      "Foobaring!",
+			AuthorID:  id,
+			CreatedAt: time.Now(),
+		}
+		err = tc.pgStore.InsertStory(&story)
+		c.Assert(err, qt.IsNil)
+
+		resp, err := http.Get(tc.url("/"))
+		c.Assert(err, qt.IsNil)
+		c.Assert(200, qt.Equals, resp.StatusCode)
+		defer resp.Body.Close()
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		a := doc.Find("a.story-url")
+		url := a.AttrOr("href", "")
+		text := a.Text()
+		c.Assert(url, qt.Equals, "/stories/"+story.ID+"/comments")
+		c.Assert(text, qt.Equals, "Self Foobar")
+	})
+
 	// 7 items, 3 per page
 	c.Run("OK pagination", func(c *qt.C) {
 		tc := newTestContext(c)
@@ -401,7 +431,6 @@ func TestSubmitStory(t *testing.T) {
 			c.Assert(resp.StatusCode, qt.Equals, test.status, qt.Commentf("url=%v", test.url))
 		}
 	})
-
 }
 
 func TestAuthentication(t *testing.T) {

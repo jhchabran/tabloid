@@ -884,6 +884,10 @@ func newStoryPresenterWithBody(story *Story) *storyPresenter {
 	}
 }
 
+func (sp *storyPresenter) IsSelfPost() bool {
+	return sp.URL == ""
+}
+
 // TODO move this, and test it
 func normalizeRedir(redir []string) (string, error) {
 	if len(redir) != 1 {

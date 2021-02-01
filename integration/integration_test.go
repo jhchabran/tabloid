@@ -208,6 +208,19 @@ func TestIndexPage(t *testing.T) {
 	})
 }
 
+func TestShowPage(t *testing.T) {
+	c := qt.New(t)
+
+	c.Run("NOK story not found", func(c *qt.C) {
+		tc := newTestContext(c)
+		tc.prepareServer()
+
+		resp, err := http.Get(tc.url("/stories/0"))
+		c.Assert(err, qt.IsNil)
+		c.Assert(404, qt.Equals, resp.StatusCode)
+	})
+}
+
 func TestSubmitStory(t *testing.T) {
 	c := qt.New(t)
 
@@ -262,7 +275,7 @@ func TestSubmitStory(t *testing.T) {
 		resp, err := client.PostForm(tc.url("/submit"), values)
 		c.Assert(err, qt.IsNil)
 		defer resp.Body.Close()
-		c.Assert(resp.StatusCode, qt.Equals, 400)
+		c.Assert(resp.StatusCode, qt.Equals, 422)
 	})
 
 	c.Run("submit with a link and a title", func(c *qt.C) {
@@ -322,7 +335,7 @@ func TestSubmitStory(t *testing.T) {
 		resp, err := client.PostForm(tc.url("/submit"), values)
 		c.Assert(err, qt.IsNil)
 		defer resp.Body.Close()
-		c.Assert(resp.StatusCode, qt.Equals, 400)
+		c.Assert(resp.StatusCode, qt.Equals, 422)
 	})
 
 	c.Run("cannot submit without a link and without a title but with a body", func(c *qt.C) {
@@ -336,7 +349,7 @@ func TestSubmitStory(t *testing.T) {
 		resp, err := client.PostForm(tc.url("/submit"), values)
 		c.Assert(err, qt.IsNil)
 		defer resp.Body.Close()
-		c.Assert(resp.StatusCode, qt.Equals, 400)
+		c.Assert(resp.StatusCode, qt.Equals, 422)
 	})
 
 	c.Run("trim spaces on title when submitting a story", func(c *qt.C) {
@@ -408,9 +421,9 @@ func TestSubmitStory(t *testing.T) {
 			url    string
 			status int
 		}{
-			{"httpfoobar.com/", 400},
-			{"httpfoobar", 400},
-			{"ftp://foobar-com/", 400},
+			{"httpfoobar.com/", 422},
+			{"httpfoobar", 422},
+			{"ftp://foobar-com/", 422},
 			{"http://foobar.com/", 200},
 			{"https://foobar.com/", 200},
 		}

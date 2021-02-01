@@ -5,10 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/google/go-github/github"
 	"github.com/gorilla/sessions"
+	"github.com/jhchabran/tabloid"
 	"github.com/jhchabran/tabloid/authentication"
 	"github.com/rs/zerolog"
 	"golang.org/x/oauth2"
@@ -107,12 +109,11 @@ func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
 	return &userSession, nil
 }
 
-func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
+func (h *Handler) Start(res http.ResponseWriter, req *http.Request) error {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
-		http.Error(res, "", http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	state := base64.URLEncoding.EncodeToString(b)
@@ -121,60 +122,51 @@ func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
 	session.Values["state"] = state
 	err = session.Save(req, res)
 	if err != nil {
-		http.Error(res, "can't save session", http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	url := h.oauthConfig.AuthCodeURL(state)
 	http.Redirect(res, req, url, 302)
+	return nil
 }
 
-func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*authentication.User) error) {
+func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*authentication.User) error) error {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
-		http.Error(res, "Session aborted", http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	if req.URL.Query().Get("state") != session.Values["state"] {
-		http.Error(res, "no state match; possible csrf OR cookies not enabled", http.StatusInternalServerError)
-		return
+		return fmt.Errorf("no state match; possible csrf OR cookies not enabled")
 	}
 
 	token, err := h.oauthConfig.Exchange(context.Background(), req.URL.Query().Get("code"))
 	if err != nil {
-		http.Error(res, "there was an issue getting your token", http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	if !token.Valid() {
-		http.Error(res, "retrieved invalid token", http.StatusBadRequest)
-		return
+		return tabloid.BadRequest(fmt.Errorf("retrieve invalid token"))
 	}
 
 	u, err := h.LoadUserData(token, req, res)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to load user data from Github")
-		http.Error(res, "failed to load user data from Github", 500)
-		return
+		return err
 	}
 
 	err = beforeWriteCallback(u)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to execute oauth callback")
-		http.Error(res, "failed to execute oauth callback", 500)
-		return
+		return err
 	}
 
 	http.Redirect(res, req, "/", 302)
+	return nil
 }
 
-func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
+func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) error {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
-		h.logger.Error().Err(err).Msg("failed to destroy session")
-		http.Error(res, "failed to destroy session", http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	// kill the session
@@ -182,9 +174,9 @@ func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
 	session.Values["user"] = nil // TODO max age probably makes this unnecessary
 	err = session.Save(req, res)
 	if err != nil {
-		http.Error(res, "can't save session", http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	http.Redirect(res, req, "/", 302)
+	return nil
 }

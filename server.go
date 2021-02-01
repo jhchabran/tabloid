@@ -4,13 +4,11 @@ package tabloid
 
 import (
 	"context"
-	"database/sql"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +22,8 @@ import (
 // Server represents the HTTP server component, with all its runtime dependencies.
 type Server struct {
 	// Logger is the server logger
-	Logger          zerolog.Logger
+	Logger zerolog.Logger
+
 	config          *ServerConfig
 	store           Store
 	router          *httprouter.Router
@@ -85,6 +84,39 @@ func NewServer(config *ServerConfig, logger zerolog.Logger, store Store, authSer
 	return s
 }
 
+// get declares a GET route with the given handle, inserting the error handling along the way.
+func (s *Server) get(path string, handle HandleE) {
+	s.router.GET(path, withError(ensureHTTPMethodMiddleware("GET")(handle)))
+}
+
+// post declares a POST route with the given handle, inserting the error handling along the way.
+func (s *Server) post(path string, handle HandleE) {
+	s.router.POST(path, withError(ensureHTTPMethodMiddleware("POST")(handle)))
+}
+
+// put declares a PUT route with the given handle, inserting the error handling along the way.
+func (s *Server) put(path string, handle HandleE) {
+	s.router.PUT(path, withError(ensureHTTPMethodMiddleware("PUT")(handle)))
+}
+
+// withError takes turns a http handler returning error into a normal http router.
+// If an error is returned by the given handler, it will respond appropriately, either
+// through delegating that to the error or by responding with an internal server error.
+func withError(h HandleE) httprouter.Handle {
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		if err := h(w, r, p); err != nil {
+			var er ErrorResponder
+			if errors.As(err, &er) {
+				if er.RespondError(w, r) {
+					return
+				}
+			}
+
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+		}
+	}
+}
+
 // Prepare setups all internal components, like connecting to the database, declaring routes and loading templates.
 func (s *Server) Prepare() error {
 	// database
@@ -95,25 +127,23 @@ func (s *Server) Prepare() error {
 	}
 
 	// routes
-	s.Logger.Debug().Msg("declaring routes")
-
-	s.router.GET("/oauth/start", s.HandleOAuthStart())
-	s.router.GET("/oauth/authorize", s.HandleOAuthCallback())
-	s.router.GET("/oauth/destroy", s.HandleOAuthDestroy())
+	s.get("/oauth/start", s.HandleOAuthStart())
+	s.get("/oauth/authorize", s.HandleOAuthCallback())
+	s.get("/oauth/destroy", s.HandleOAuthDestroy())
 
 	withMiddlewares(func(m middleware) {
-		s.router.GET("/", m(s.HandleIndex()))
-		s.router.GET("/stories/:id/comments", m(s.HandleShow()))
-		s.router.GET("/submit", m(s.HandleSubmit()))
+		s.get("/", m(s.HandleIndex()))
+		s.get("/stories/:id/comments", m(s.HandleShow()))
+		s.get("/submit", m(s.HandleSubmit()))
 	}, s.loadSessionMiddleware())
 
 	withMiddlewares(func(m middleware) {
-		s.router.POST("/submit", m(s.HandleSubmitAction()))
-		s.router.POST("/stories/:id/comments", m(s.HandleSubmitCommentAction()))
-		s.router.POST("/stories/:id/votes", m(s.HandleVoteStoryAction()))
-		s.router.POST("/story/:story_id/comments/:id/votes", m(s.HandleVoteCommentAction()))
-		s.router.GET("/story/:story_id/comments/:id/edit", m(s.HandleCommentEdit()))
-		s.router.PUT("/story/:story_id/comments/:id", m(s.HandleCommentUpdateAction()))
+		s.post("/submit", m(s.HandleSubmitAction()))
+		s.post("/stories/:id/comments", m(s.HandleSubmitCommentAction()))
+		s.post("/stories/:id/votes", m(s.HandleVoteStoryAction()))
+		s.post("/story/:story_id/comments/:id/votes", m(s.HandleVoteCommentAction()))
+		s.get("/story/:story_id/comments/:id/edit", m(s.HandleCommentEdit()))
+		s.put("/story/:story_id/comments/:id", m(s.HandleCommentUpdateAction()))
 	}, s.loadSessionMiddleware(), s.loadUserMiddleware())
 
 	s.router.ServeFiles("/static/*filepath", http.Dir("assets/static"))

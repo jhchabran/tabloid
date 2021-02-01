@@ -78,45 +78,51 @@ func (h *Handler) CurrentUser(req *http.Request) (*authentication.User, error) {
 	return &userSession, nil
 }
 
-func (h *Handler) Start(res http.ResponseWriter, req *http.Request) {
+func (h *Handler) Start(res http.ResponseWriter, req *http.Request) error {
 	session, err := h.sessionStore.Get(req, sessionKey)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	session.Values["state"] = "state"
 	err = session.Save(req, res)
 	if err != nil {
-		http.Error(res, "cannot save cookies", 500)
-		return
+		return err
 	}
 
 	// make subsequent login behave as a new user
 	h.counter++
 	http.Redirect(res, req, h.serverUrl+"/oauth/authorize", 302)
+	return nil
 }
 
-func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*authentication.User) error) {
+func (h *Handler) Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*authentication.User) error) error {
 	u, err := h.LoadUserData(nil, req, res)
 	if err != nil {
-		http.Error(res, "couldn't load user data from fake auth", 500)
-		return
+		return err
 	}
 
 	err = beforeWriteCallback(u)
 	if err != nil {
-		http.Error(res, "failed to execute oauth callback", 500)
-		return
+		return err
 	}
 
 	http.Redirect(res, req, "/", 302)
+	return nil
 }
 
-func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) {
-	// TODO error
-	session, _ := h.sessionStore.Get(req, sessionKey)
+func (h *Handler) Destroy(res http.ResponseWriter, req *http.Request) error {
+	session, err := h.sessionStore.Get(req, sessionKey)
+	if err != nil {
+		return err
+	}
+
 	session.Options.MaxAge = -1
-	session.Save(req, res)
+	err = session.Save(req, res)
+	if err != nil {
+		return err
+	}
 
 	http.Redirect(res, req, "/", 302)
+	return nil
 }

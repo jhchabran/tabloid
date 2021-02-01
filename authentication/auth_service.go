@@ -9,9 +9,9 @@ import (
 // An OAuthHandler is responsible of providing the callbacks to interact
 // with an OAuth provider.
 type OAuthHandler interface {
-	Start(res http.ResponseWriter, req *http.Request)
-	Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*User) error)
-	Destroy(res http.ResponseWriter, req *http.Request)
+	Start(res http.ResponseWriter, req *http.Request) error
+	Callback(res http.ResponseWriter, req *http.Request, beforeWriteCallback func(*User) error) error
+	Destroy(res http.ResponseWriter, req *http.Request) error
 }
 
 // An AuthService wraps OAuth and a access to the current user.

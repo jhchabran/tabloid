@@ -13,10 +13,13 @@ import (
 )
 
 // middleware is a convenient type for declaring middlewares.
-type middleware func(httprouter.Handle) httprouter.Handle
+type middleware func(HandleE) HandleE
 
 // httpMiddleware is a convenient type for declaring middlewares.
 type httpMiddleware func(http.Handler) http.Handler
+
+// errorUnwrapper transforms a http handler that return error (HandlerE) into a httprouter.Handle
+type errorUnwrapper func(HandleE) httprouter.Handle
 
 // contextKey is a type for storing values in each request context.
 type contextKey string
@@ -54,33 +57,46 @@ func ctxUser(ctx context.Context) *User {
 // The caller declares its routes in the body on the f function, calling f's argument on its
 // httprouter.Handle to wrap them.
 func withMiddlewares(f func(middleware), middlewares ...middleware) {
-	wrapper := func(handle httprouter.Handle) httprouter.Handle {
+	wrapper := func(handle HandleE) HandleE {
 		h := handle
 		for i := len(middlewares) - 1; i >= 0; i-- {
 			m := middlewares[i]
 			h = m(h)
 		}
+
 		return h
 	}
 
 	f(wrapper)
 }
 
+// ensureHTTPMethod checks if the incoming request matches the given method, responding
+// with an error if that's not the case.
+func ensureHTTPMethodMiddleware(method string) middleware {
+	return func(next HandleE) HandleE {
+		return HandleE(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) error {
+			if r.Method != strings.ToUpper(method) {
+				return MethodNotAllowed(r.Method, r.URL.Path)
+			}
+
+			return next(w, r, p)
+		})
+	}
+}
+
 // loadSessionMiddleware fetches the user session data through the AuthService
 // and stores it in the request context. If there's no session it will assign nil in
-// the context to thes session key.
+// the context to the session key.
 func (s *Server) loadSessionMiddleware() middleware {
-	return func(next httprouter.Handle) httprouter.Handle {
-		return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	return func(next HandleE) HandleE {
+		return HandleE(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) error {
 			userData, err := s.authService.CurrentUser(r)
 			if err != nil {
-				s.Logger.Warn().Err(err).Msg("Failed to fetch session data")
-				http.Error(w, "Failed to fetch session data", http.StatusInternalServerError)
-				return
+				return err
 			}
 
 			ctx := context.WithValue(r.Context(), ctxKeySession, userData)
-			next(w, r.WithContext(ctx), p)
+			return next(w, r.WithContext(ctx), p)
 		})
 	}
 }
@@ -88,39 +104,34 @@ func (s *Server) loadSessionMiddleware() middleware {
 // loadUser fetches the user from the database and stores it in the request context. If there's an error
 // it will interrupt the middlware chain, returning an http error.
 //
-// If there is no session, it will send a http error about not being authorized.
+// If there is no session, it will return an authorization error.
 func (s *Server) loadUserMiddleware() middleware {
-	return func(next httprouter.Handle) httprouter.Handle {
-		return httprouter.Handle(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-			s.Logger.Debug().Msg("user")
+	return func(next HandleE) HandleE {
+		return HandleE(func(w http.ResponseWriter, r *http.Request, p httprouter.Params) error {
 			session := ctxSession(r.Context())
 
 			if session == nil {
-				s.Logger.Debug().Msg("Attempt to load user with no session, halting middleware chain and redirecting.")
-				// TODO some flash notice would be useful here.
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
+				return Unauthorized(r.URL.Path)
 			}
 
 			userRecord, err := s.store.FindUserByLogin(session.Login)
 			if err != nil {
-				s.Logger.Error().Err(err).Msg("Failed to fetch user from db")
-				http.Error(w, "Failed to fetch user from database", http.StatusInternalServerError)
-				return
+				return err
 			}
 
-			// there is a session but no user in the database, wiping the session
 			if userRecord == nil {
-				s.authService.Destroy(w, r)
-				return
+				// there is a session but no user in the database, wipe the session and redirect
+				return s.authService.Destroy(w, r)
 			}
 
 			ctx := context.WithValue(r.Context(), ctxKeyUser, userRecord)
-			next(w, r.WithContext(ctx), p)
+			return next(w, r.WithContext(ctx), p)
 		})
 	}
 }
 
+// httpVerbFormUnwrapper extract "_method" form parameter and update the request HTTP verb accordingly.
+// It is a top level http middleware, being placed in front of the router.
 func (s *Server) httpVerbFormUnwrapper(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
 		// if we have a POST method, we need to read the body to get to the form field name "_method", in order to

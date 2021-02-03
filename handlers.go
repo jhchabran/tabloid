@@ -32,6 +32,7 @@ func (s *Server) HandleOAuthCallback() HandleE {
 		// probably a before write callback is good enough?
 		return s.authService.Callback(res, req, func(u *authentication.User) error {
 			_, err := s.store.CreateOrUpdateUser(u.Login, u.Email)
+			SetFlash(res, "success", "Signed in.")
 			return err
 		})
 	}
@@ -542,6 +543,7 @@ func (s *Server) HandleCommentEdit() HandleE {
 		// If comment is older than edit window, let's redirect
 		editWindow := time.Duration(s.config.EditWindowInMinutes) * time.Minute
 		if comment.CreatedAt.Add(editWindow).Before(NowFunc()) {
+			SetFlash(res, "warning", "Comment is too old to be edited.")
 			http.Redirect(res, req, "/stories/"+story.ID+"/comments", http.StatusFound)
 			return nil
 		}
@@ -599,6 +601,7 @@ func (s *Server) HandleCommentUpdateAction() HandleE {
 			return err
 		}
 
+		SetFlash(res, "success", "Comment has been edited")
 		http.Redirect(res, req, "/stories/"+storyID+"/comments", http.StatusFound)
 		return nil
 	}

@@ -286,16 +286,26 @@ func (s *Server) handleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 
 func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Request, params httprouter.Params, tmpl *template.Template) error {
 	session := ctxSession(req.Context())
-
-	id := params.ByName("id")
-	story, err := s.store.FindStory(id)
-	if err != nil {
-		return Maybe404(err)
-	}
-
 	userRecord, err := s.store.FindUserByLogin(session.Login)
 	if err != nil {
 		return err
+	}
+
+	if userRecord == nil {
+		// there is a session but no user in the database, wiping the session
+		err := s.authService.Destroy(res, req)
+		if err != nil {
+			return err
+		}
+
+		http.Redirect(res, req, "/", http.StatusFound)
+		return nil
+	}
+
+	id := params.ByName("id")
+	story, err := s.store.FindStoryWithVote(id, userRecord.ID)
+	if err != nil {
+		return Maybe404(err)
 	}
 
 	comments, err := s.store.ListCommentsWithVotes(story.ID, userRecord.ID)
@@ -309,9 +319,11 @@ func (s *Server) handleShowAuthenticated(res http.ResponseWriter, req *http.Requ
 	}
 	commentsTree := NewCommentPresentersTree(cc)
 	commentsTree.SetCanEdits(userRecord.Name, time.Duration(s.config.EditWindowInMinutes)*time.Minute, NowFunc())
+	storyPresenter := newStoryPresenterWithBody(&story.Story)
+	storyPresenter.Upvoted = story.Up.Bool
 
 	err = tmpl.Execute(res, map[string]interface{}{
-		"Story":    newStoryPresenterWithBody(story),
+		"Story":    storyPresenter,
 		"Comments": commentsTree,
 		"Session":  session,
 	})

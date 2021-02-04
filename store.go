@@ -3,6 +3,7 @@ package tabloid
 type Store interface {
 	Connect() error
 	FindStory(ID string) (*Story, error)
+	FindStoryWithVote(ID string, userID string) (*StorySeenByUser, error)
 	ListStories(page int, perPage int) ([]*Story, error)
 	ListStoriesWithVotes(userID string, page int, perPage int) ([]*StorySeenByUser, error)
 	InsertStory(item *Story) error

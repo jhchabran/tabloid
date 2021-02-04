@@ -4,6 +4,7 @@ package tabloid
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -266,4 +267,15 @@ func normalizeRedir(redir []string) (string, error) {
 	}
 
 	return redir[0], nil
+}
+
+// SetFlash sets a cookie on the http response.
+// Valid levels are primary, secondary, success, danger, warning , info, light and dark.
+//
+// Its display is handled client side through JS.
+func SetFlash(w http.ResponseWriter, level string, value string) {
+	wrap := fmt.Sprintf("{\"level\":\"%s\", \"message\":\"%s\"}", level, value)
+	encodedValue := base64.URLEncoding.EncodeToString([]byte(wrap))
+	c := &http.Cookie{Name: "flash-message", Value: encodedValue, Path: "/"}
+	http.SetCookie(w, c)
 }

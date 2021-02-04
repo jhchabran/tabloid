@@ -80,6 +80,22 @@ func (s *PGStore) FindStory(ID string) (*tabloid.Story, error) {
 	return &story, nil
 }
 
+func (s *PGStore) FindStoryWithVote(storyID string, userID string) (*tabloid.StorySeenByUser, error) {
+	story := tabloid.StorySeenByUser{}
+	err := s.db.Get(&story,
+		`SELECT stories.*, users.name as author, users.id as user_id, votes.up as up
+		FROM stories
+		JOIN users ON stories.author_id = users.id
+		LEFT JOIN votes ON stories.id = votes.story_id AND votes.user_id = $1
+		WHERE stories.id = $2`,
+		userID, storyID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &story, nil
+}
+
 func (s *PGStore) InsertStory(story *tabloid.Story) error {
 	var id string
 	now := tabloid.NowFunc()

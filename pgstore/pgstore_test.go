@@ -38,6 +38,26 @@ func TestPGStore(t *testing.T) {
 		c.Assert(story.Score, qt.Equals, 1, qt.Commentf("story must have its score field updated"))
 	})
 
+	c.Run("Find story with its vote", func(c *qt.C) {
+		c.Cleanup(func() {
+			store.DB().MustExec("TRUNCATE TABLE stories;")
+			store.DB().MustExec("TRUNCATE TABLE comments;")
+			store.DB().MustExec("TRUNCATE TABLE users;")
+			store.DB().MustExec("TRUNCATE TABLE votes;")
+		})
+
+		userA, err := store.CreateOrUpdateUser("a", "a@a.com")
+		c.Assert(err, qt.IsNil)
+
+		story := tabloid.NewStory("foo", "body", userA, "http://foobar.com")
+		err = store.InsertStory(story)
+		c.Assert(err, qt.IsNil)
+
+		s, err := store.FindStoryWithVote(story.ID, userA)
+		c.Assert(err, qt.IsNil)
+		c.Assert(s.Up.Bool, qt.IsTrue)
+	})
+
 	c.Run("List comments with votes", func(c *qt.C) {
 		c.Cleanup(func() {
 			store.DB().MustExec("TRUNCATE TABLE stories;")

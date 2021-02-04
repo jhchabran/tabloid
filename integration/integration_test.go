@@ -492,6 +492,8 @@ func TestAuthentication(t *testing.T) {
 	})
 }
 
+// TestStoryVoting is brittler than other tests because it doesn't reset the
+// database state in between subtests, upvote count depending on previous subtests.
 func TestStoryVoting(t *testing.T) {
 	c := qt.New(t)
 	tc := newTestContext(c)
@@ -517,7 +519,7 @@ func TestStoryVoting(t *testing.T) {
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
 	c.Assert(err, qt.IsNil)
 
-	c.Run("click on the upvote arrow", func(c *qt.C) {
+	c.Run("click on the upvote arrow (index page)", func(c *qt.C) {
 		// Find the upvote button
 		action, ok := doc.Find(".voters form.upvoter").Attr("action")
 		c.Assert(ok, qt.IsTrue)
@@ -539,7 +541,51 @@ func TestStoryVoting(t *testing.T) {
 		c.Assert(ok, qt.IsTrue, qt.Commentf("disabled attribute must be present on the button"))
 	})
 
-	c.Run("click on the upvet arrow when unauthenticated should redirect to login", func(c *qt.C) {
+	c.Run("upvote button should be disabled on the story page as well", func(c *qt.C) {
+		// go to the comments page
+		href, ok := doc.Find("a.story-comments").Attr("href")
+		c.Assert(ok, qt.IsTrue, qt.Commentf("can't find the story link"))
+
+		resp, err := client.Get(tc.url(href))
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		doc, err := goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		_, ok = doc.Find(".voters form.upvoter button").Attr("disabled")
+		c.Assert(ok, qt.IsTrue, qt.Commentf("disabled attribute must be present on the button"))
+	})
+
+	c.Run("click on the upvote arrow (show page)", func(c *qt.C) {
+		// go to the comments page (show)
+		href, ok := doc.Find("a.story-comments").Attr("href")
+		c.Assert(ok, qt.IsTrue, qt.Commentf("can't find the story link"))
+
+		client := tc.newAuthenticatedClient()
+		resp, err := client.Get(tc.url(href))
+		c.Assert(err, qt.IsNil)
+		c.Assert(resp.StatusCode, qt.Equals, 200)
+		defer resp.Body.Close()
+
+		// Find the upvote button
+		action, ok := doc.Find(".voters form.upvoter").Attr("action")
+		c.Assert(ok, qt.IsTrue)
+		c.Assert(action, qt.Not(qt.IsNil))
+
+		resp, err = client.PostForm(tc.url(action), nil)
+		c.Assert(err, qt.IsNil)
+		defer resp.Body.Close()
+
+		doc, err = goquery.NewDocumentFromReader(resp.Body)
+		c.Assert(err, qt.IsNil)
+
+		// The story score should be 3 (original upvote plus this one)
+		c.Assert(doc.Find("span.story-meta").Text(), qt.Contains, "3 by alpha, today")
+	})
+
+	c.Run("click on the upvote arrow when unauthenticated should redirect to login", func(c *qt.C) {
 		client := tc.newHTTPClient()
 		resp, err := client.Get(tc.url("/"))
 		c.Assert(err, qt.IsNil)
@@ -577,8 +623,8 @@ func TestStoryVoting(t *testing.T) {
 		doc, err = goquery.NewDocumentFromReader(resp.Body)
 		c.Assert(err, qt.IsNil)
 
-		// The story score should now be 3
-		c.Assert(doc.Find("span.story-meta").Text(), qt.Contains, "3 by alpha, today")
+		// The story score should now be 4
+		c.Assert(doc.Find("span.story-meta").Text(), qt.Contains, "4 by alpha, today")
 	})
 }
 
@@ -973,7 +1019,7 @@ func TestCommentsVoting(t *testing.T) {
 
 	c.Run("click on the upvote arrow", func(c *qt.C) {
 		// Find the upvote button
-		action, ok := doc.Find(".voters form.upvoter").Attr("action")
+		action, ok := doc.Find(".comments .voters form.upvoter").Attr("action")
 		c.Assert(ok, qt.IsTrue)
 		c.Assert(action, qt.Not(qt.IsNil))
 
@@ -989,7 +1035,7 @@ func TestCommentsVoting(t *testing.T) {
 	})
 
 	c.Run("upvote button should disappear after voting", func(c *qt.C) {
-		_, ok := doc.Find(".voters form.upvoter button").Attr("disabled")
+		_, ok := doc.Find(".comments .voters form.upvoter button").Attr("disabled")
 		c.Assert(ok, qt.IsTrue, qt.Commentf("disabled attribute must be present on the button"))
 	})
 
@@ -1033,7 +1079,7 @@ func TestCommentsVoting(t *testing.T) {
 		c.Assert(err, qt.IsNil)
 
 		// Find the upvote button
-		action, ok := doc.Find(".voters form.upvoter").Attr("action")
+		action, ok := doc.Find(".comments .voters form.upvoter").Attr("action")
 		c.Assert(ok, qt.IsTrue)
 		c.Assert(action, qt.Not(qt.IsNil))
 

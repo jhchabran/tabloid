@@ -38,9 +38,11 @@ type Server struct {
 
 // ServerConfig represents the settings required for the server to operate.
 type ServerConfig struct {
-	Addr                string
-	StoriesPerPage      int
-	EditWindowInMinutes int
+	Addr                     string
+	StoriesPerPage           int
+	EditWindowInMinutes      int
+	FrontPageTimeBaseInHours int
+	FrontPageGravity         float64
 }
 
 func init() {
@@ -214,7 +216,7 @@ type storyPresenter struct {
 	Title         string
 	URL           string
 	Body          template.HTML
-	Score         int
+	Score         int64
 	Author        string
 	AuthorID      string
 	CommentsCount int64

@@ -4,7 +4,12 @@ import (
 	"database/sql"
 	"html/template"
 	"regexp"
+	"runtime"
+	"sort"
+	"sync"
 	"time"
+
+	"github.com/jhchabran/tabloid/ranking"
 )
 
 // A username starts with a @, includes only alphanumerical chars or a hyphen.
@@ -23,6 +28,8 @@ type Comment struct {
 }
 
 func (c *Comment) GetID() string                      { return c.ID }
+func (c *Comment) GetScore() int64                    { return c.Score }
+func (c *Comment) Age() time.Time                     { return c.CreatedAt }
 func (c *Comment) GetParentCommentID() sql.NullString { return c.ParentCommentID }
 func (c *Comment) Pings() []string {
 	matches := usernameRegexp.FindAllStringSubmatch(c.Body, -1)
@@ -49,6 +56,8 @@ func (c *CommentSeenByUser) GetParentCommentID() sql.NullString { return c.Paren
 type CommentAccessor interface {
 	GetID() string
 	GetParentCommentID() sql.NullString
+	GetScore() int64
+	Age() time.Time
 }
 
 // TODO move this in a better place
@@ -73,6 +82,9 @@ func (c *CommentPresenter) SetCanEdit(userName string, editWindow time.Duration,
 	c.CanEdit = userName == c.Author && c.CreatedAt.Add(editWindow).After(at)
 }
 
+func (c *CommentPresenter) GetScore() int64 { return c.Score }
+func (c *CommentPresenter) Age() time.Time  { return c.CreatedAt }
+
 // CommentTree is a simple tree of comments ordered by score
 type CommentNode struct {
 	Comment  CommentAccessor
@@ -93,10 +105,38 @@ func (t CommentPresentersTree) SetCanEdits(userName string, editWindow time.Dura
 	}
 }
 
-// TODO ordering?
+func (t CommentPresentersTree) Sort(rankFn func(s ranking.Rankable) float64) {
+	count := runtime.NumCPU()
+	q := make(chan CommentPresentersTree, count)
+	var wg sync.WaitGroup
+
+	q <- t
+	wg.Add(1)
+
+	for i := 0; i < count; i++ {
+		go func() {
+			for {
+				cs := <-q
+				sort.Slice(cs, func(i, j int) bool {
+					return rank(cs[i]) > rank(cs[j])
+				})
+
+				for _, child := range cs {
+					wg.Add(1)
+					q <- child.Children
+				}
+
+				wg.Done()
+			}
+		}()
+
+	}
+	wg.Wait()
+}
+
 func NewCommentPresentersTree(comments []CommentAccessor) CommentPresentersTree {
 	index := map[sql.NullString]*CommentNode{}
-	var roots []*CommentNode
+	var root []*CommentNode
 
 	for _, c := range comments {
 		// create the node
@@ -112,7 +152,7 @@ func NewCommentPresentersTree(comments []CommentAccessor) CommentPresentersTree 
 		node.Comment = c
 
 		if !c.GetParentCommentID().Valid {
-			roots = append(roots, node)
+			root = append(root, node)
 		}
 
 		// create parent if it doesn't exists yet
@@ -131,7 +171,7 @@ func NewCommentPresentersTree(comments []CommentAccessor) CommentPresentersTree 
 
 	// Turn the nodes into presenters
 	result := []*CommentPresenter{}
-	for _, n := range roots {
+	for _, n := range root {
 		result = append(result, NewCommentPresenter(n))
 	}
 	return result
@@ -143,7 +183,7 @@ func NewComment(storyID string, parentCommentID sql.NullString, body string, aut
 		StoryID:         storyID,
 		Body:            body,
 		AuthorID:        authorID,
-		CreatedAt:       time.Now(),
+		CreatedAt:       NowFunc(),
 	}
 }
 

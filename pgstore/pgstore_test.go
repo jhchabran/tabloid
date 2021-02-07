@@ -35,7 +35,7 @@ func TestPGStore(t *testing.T) {
 		c.Assert(vote.UserID, qt.Equals, userID)
 		c.Assert(vote.StoryID, qt.Equals, sql.NullString{String: story.ID, Valid: true})
 		c.Assert(vote.Up, qt.IsTrue, qt.Commentf("vote must be up when creating a story"))
-		c.Assert(story.Score, qt.Equals, 1, qt.Commentf("story must have its score field updated"))
+		c.Assert(story.Score, qt.Equals, int64(1), qt.Commentf("story must have its score field updated"))
 	})
 
 	c.Run("Find story with its vote", func(c *qt.C) {

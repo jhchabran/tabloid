@@ -108,14 +108,16 @@ See `config.example.json`.
 - `PORT` sets the port to listen for incoming requests, supersedes `ADDR`.
 - `ADDR` sets the address to listen for incoming requests
 - `DATABASE_URL` sets the database url string, supersedes other database settings below.
-- `DATABASE_NAME`sets the database name
-- `DATABASE_USER`sets the database user
-- `DATABASE_HOST`sets the database host
-- `DATABASE_PASSWORD`sets the database password
-- `GITHUB_CLIENT_ID`sets the Github client ID
-- `GITHUB_CLIENT_SECRET`sets the Github client secret
-- `SERVER_SECRET`sets the server secret for cookies
-- `STORIES_PER_PAGE`sets the server number of stories per page; default to `20`.
+- `DATABASE_NAME` sets the database name
+- `DATABASE_USER` sets the database user
+- `DATABASE_HOST` sets the database host
+- `DATABASE_PASSWORD` sets the database password
+- `GITHUB_CLIENT_ID` sets the Github client ID
+- `GITHUB_CLIENT_SECRET` sets the Github client secret
+- `SERVER_SECRET` sets the server secret for cookies
+- `STORIES_PER_PAGE` sets the server number of stories per page; default to `20`.
+- `FRONT_PAGE_TIME_BASE_IN_HOURS` adjusts how front page stories are ranked; it defines the time window that may be considered as "current"; defaults to `24` ([Visualisation](https://www.wolframalpha.com/input/?i=plot%28+%28p+-+1%09%29+%2F+%28t%2B+1%29%5E1.8%2C++%28p+-+1%29+%2F+%28t+%2B+8%29%5E1.8%2C+%28p+-+1%29+%2F+%28t+%2B+12%29%5E1.8+%29+where+t%3D0..48%2C+p%3D10))
+- `FRONT_PAGE_GRAVITY` adjusts how front page stories are ranked; it defines how fast the ranking decrease as older a story gets; defaults to `1.8`. ([Visualisation](https://www.wolframalpha.com/input/?i=plot%28+%28p+-+1%09%29+%2F+%28t%2B+2%29%5E1.1%2C++%28p+-+1%29+%2F+%28t+%2B+2%29%5E1.8%2C+%28p+-+1%29+%2F+%28t+%2B+2%29%5E0.7+%29+where+t%3D0..24%2C+p%3D10))
 
 Configuration for the provided example main (`cmd/server/main.go`), used for dev purpose until we reach a stable release:
 

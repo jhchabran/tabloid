@@ -12,34 +12,38 @@ import (
 )
 
 type Config struct {
-	LogLevel            string `json:"log_level"`
-	LogFormat           string `json:"log_format"`
-	DatabaseName        string `json:"database_name"`
-	DatabaseUser        string `json:"database_user"`
-	DatabaseHost        string `json:"database_host"`
-	DatabasePassword    string `json:"database_password"`
-	DatabaseURL         string `json:"database_url"`
-	GithubClientID      string `json:"github_client_id"`
-	GithubClientSecret  string `json:"github_client_secret"`
-	ServerSecret        string `json:"server_secret"`
-	StoriesPerPage      int    `json:"stories_per_page"`
-	EditWindowInMinutes int    `json:"edit_window_in_minutes"`
-	Addr                string `json:"addr"`
-	RootURL             string `json:"root_url"`
+	LogLevel                 string  `json:"log_level"`
+	LogFormat                string  `json:"log_format"`
+	DatabaseName             string  `json:"database_name"`
+	DatabaseUser             string  `json:"database_user"`
+	DatabaseHost             string  `json:"database_host"`
+	DatabasePassword         string  `json:"database_password"`
+	DatabaseURL              string  `json:"database_url"`
+	GithubClientID           string  `json:"github_client_id"`
+	GithubClientSecret       string  `json:"github_client_secret"`
+	ServerSecret             string  `json:"server_secret"`
+	StoriesPerPage           int     `json:"stories_per_page"`
+	EditWindowInMinutes      int     `json:"edit_window_in_minutes"`
+	FrontPageTimeBaseInHours int     `json:"front_page_time_base_in_hours"`
+	FrontPageGravity         float64 `json:"front_page_gravity"`
+	Addr                     string  `json:"addr"`
+	RootURL                  string  `json:"root_url"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		LogLevel:            "info",
-		LogFormat:           "json",
-		DatabaseName:        "tabloid",
-		DatabaseUser:        "postgres",
-		DatabasePassword:    "postgres",
-		DatabaseHost:        "127.0.0.1",
-		StoriesPerPage:      10,
-		EditWindowInMinutes: 60,
-		Addr:                "localhost:8080",
-		RootURL:             "http://localhost:8080",
+		LogLevel:                 "info",
+		LogFormat:                "json",
+		DatabaseName:             "tabloid",
+		DatabaseUser:             "postgres",
+		DatabasePassword:         "postgres",
+		DatabaseHost:             "127.0.0.1",
+		StoriesPerPage:           10,
+		EditWindowInMinutes:      60,
+		FrontPageTimeBaseInHours: 3 * 24,
+		FrontPageGravity:         1.8,
+		Addr:                     "localhost:8080",
+		RootURL:                  "http://localhost:8080",
 	}
 }
 
@@ -124,6 +128,26 @@ func (c *Config) Load() error {
 		}
 
 		c.EditWindowInMinutes = vi
+	}
+
+	v = os.Getenv("FRONT_PAGE_TIME_BASE_IN_HOURS")
+	if v != "" {
+		vi, err := strconv.Atoi(v)
+		if err != nil {
+			return err
+		}
+
+		c.FrontPageTimeBaseInHours = vi
+	}
+
+	v = os.Getenv("FRONT_PAGE_GRAVITY")
+	if v != "" {
+		vf, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return err
+		}
+
+		c.FrontPageGravity = vf
 	}
 
 	v = os.Getenv("ADDR")

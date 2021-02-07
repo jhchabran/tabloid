@@ -6,11 +6,13 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/jhchabran/tabloid/authentication"
+	"github.com/jhchabran/tabloid/ranking"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -103,6 +105,11 @@ func (s *Server) handleAuthenticatedIndex(res http.ResponseWriter, req *http.Req
 		return err
 	}
 
+	// sort story by their rank
+	sort.Slice(stories, func(i, j int) bool {
+		return rank(stories[i]) > rank(stories[j])
+	})
+
 	storyPresenters := []*storyPresenter{}
 	for i, st := range stories {
 		pos := 1 + i + (page * s.config.StoriesPerPage)
@@ -155,6 +162,11 @@ func (s *Server) handleUnauthenticatedIndex(res http.ResponseWriter, req *http.R
 	if err != nil {
 		return err
 	}
+
+	// sort story by their rank
+	sort.Slice(stories, func(i, j int) bool {
+		return rank(stories[i]) > rank(stories[j])
+	})
 
 	storyPresenters := []*storyPresenter{}
 	for i, st := range stories {
@@ -269,7 +281,9 @@ func (s *Server) handleShowUnauthenticated(res http.ResponseWriter, req *http.Re
 	for i, c := range comments {
 		cc[i] = c
 	}
+
 	commentsTree := NewCommentPresentersTree(cc)
+	commentsTree.Sort(rank)
 
 	err = tmpl.Execute(res, map[string]interface{}{
 		"Story":    story,
@@ -617,4 +631,8 @@ func (s *Server) HandleCommentUpdateAction() HandleE {
 		http.Redirect(res, req, "/stories/"+storyID+"/comments", http.StatusFound)
 		return nil
 	}
+}
+
+func rank(s ranking.Rankable) float64 {
+	return ranking.Rank(s, 1.8, 4*24, NowFunc())
 }

@@ -10,7 +10,7 @@ type Story struct {
 	Title         string    `db:"title"`
 	URL           string    `db:"url"`
 	Body          string    `db:"body"`
-	Score         int       `db:"score"`
+	Score         int64     `db:"score"`
 	Author        string    `db:"author"`
 	AuthorID      string    `db:"author_id"`
 	CommentsCount int64     `db:"comments_count"`
@@ -32,4 +32,12 @@ func NewStory(title string, body string, authorID string, url string) *Story {
 		URL:       url,
 		CreatedAt: NowFunc(),
 	}
+}
+
+func (s *Story) GetScore() int64 {
+	return s.Score
+}
+
+func (s *Story) Age() time.Time {
+	return s.CreatedAt
 }
